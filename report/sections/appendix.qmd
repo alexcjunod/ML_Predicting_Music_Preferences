@@ -1,0 +1,106 @@
+```{r, echo=FALSE, message=FALSE}
+source(here::here("src/setup.R"))
+```
+
+# Appendix
+
+## Exploratory Data Analysis
+
+### Distribution and Comparison of Variables by Liked Status (Density/Histogram Plots) - All Features
+
+```{r univariate single graphs appendix, echo=FALSE}
+numeric_columns <- names(df_clean)[sapply(df_clean, is.numeric)]
+
+# Generate plots for each numeric variable
+for (col in numeric_columns) {
+  if (col != "Liked") {
+    # Calculate averages for each Liked status
+    averages <- df_clean %>%
+      group_by(Liked) %>%
+      summarise(Avg = mean(get(col), na.rm = TRUE)) %>%
+      mutate(Liked = as.factor(Liked))  # Ensure Liked is a factor for aesthetics
+
+    # Combined Histogram and Density Plot with Averages
+    plot <- ggplot(df_clean, aes_string(x = col, fill = "factor(Liked)")) +
+      geom_histogram(aes(y = after_stat(density)), fill = "grey", color = "black", bins = 30) +  # Histogram for overall distribution
+      geom_density(alpha = 0.5, aes(color = factor(Liked), fill = factor(Liked))) +  # Density plots with color
+      geom_vline(data = averages, aes(xintercept = Avg, color = Liked), linetype = "dashed", size = 1) +  # Average lines
+      labs(title = paste("Distribution and Comparison of", col, "by Liked Status"),
+           x = col, y = "Density") +
+      theme_minimal() +
+      scale_fill_manual(values = c("#FE4A49", "#3C6E71")) +  # Colors for the fill of density plot
+      scale_color_manual(values = c("#FE4A49", "#3C6E71")) +  # Colors for the density lines
+      guides(fill=guide_legend(title="Liked Status"), color=guide_legend(title="Liked Status"))  # Adjust the legend for clarity
+
+    # Print the plot
+    print(plot)
+  }
+}
+```
+
+## Supervised Learning Results
+
+### Baseline Model Scores on Validation Set
+
+```{r}
+metrics_table_baseline
+```
+
+### Baseline vs Tuned Model Scores on Validation Set
+
+```{r}
+metrics_table_baseline_tuned
+```
+
+### Tuned Model Scores on Test Set
+
+```{r}
+metrics_table_test
+```
+
+### Partial Dependence Plots 
+
+```{r}
+# Define the function to generate and display PDPs for all numeric features
+generate_all_pdps <- function(df, glm_model, rf_model) {
+  # Identify all numeric features in the dataframe
+  features <- names(df)[sapply(df, is.numeric)]
+
+  # Prepare mean values for the entire dataset
+  mean_values <- colMeans(df[, features, drop = FALSE], na.rm = TRUE)
+
+  # Loop over all numeric features
+  for (feature in features) {
+    # Prepare the data frame for prediction
+    varied_values <- seq(min(df[[feature]], na.rm = TRUE), max(df[[feature]], na.rm = TRUE), length.out = 100)
+    predictions_df <- as.data.frame(t(replicate(length(varied_values), mean_values)))
+    predictions_df[[feature]] <- varied_values
+
+    # Predict probabilities for Logistic Regression
+    pred_glm <- predict(glm_model, newdata = predictions_df, type = "prob")$Positive
+    data_glm <- data.frame(Value = varied_values, Probability = pred_glm, Model = "Logistic Regression")
+
+    # Predict probabilities for Random Forest
+    pred_rf <- predict(rf_model, newdata = predictions_df, type = "prob")$Positive
+    data_rf <- data.frame(Value = varied_values, Probability = pred_rf, Model = "Random Forest")
+
+    # Combine data for plotting
+    combined_data <- rbind(data_glm, data_rf)
+
+    # Create plot for current feature
+    p <- ggplot(combined_data, aes(x = Value, y = Probability, color = Model)) +
+      geom_line() +
+      labs(title = paste("Partial Dependence Plot for", feature), x = feature, y = "Predicted Probability of Positive") +
+      theme_minimal() +
+      scale_color_manual(values = c("#3C6E71", "#FE4A49"))
+
+    # Print plot directly
+    print(p)
+  }
+}
+
+# Example usage:
+generate_all_pdps(df_te, glmnet_model_final, rf_model_final)
+```
+
+## References

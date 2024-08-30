@@ -1,0 +1,379 @@
+# Data
+
+* Sources
+
+```{r}
+library(reticulate)
+library(here)
+library(dplyr)
+library(tidyr)
+```
+
+```{r}
+library(reticulate)
+# Create a new Conda environment
+conda_create("spotify_env")
+# Set `reticulate` to use the new environment
+use_condaenv("spotify_env", required = TRUE)
+# Check the configuration
+py_config()
+py_install(c("spotipy", "pandas"), envname = "spotify_env")
+```
+
+```{r, echo=FALSE}
+spotipy_script <- "
+import spotipy
+from spotipy.oauth2 import SpotifyClientCredentials
+import pandas as pd
+
+client_id = '6a91a1da7e484e659532888e8ab5f8e2'
+client_secret = '9e57ca7e029c43caa47f77fe321a8767'
+client_credentials_manager = SpotifyClientCredentials(client_id=client_id, client_secret=client_secret)
+sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager)
+
+playlist_link = 'https://open.spotify.com/playlist/5s4m4kmikUzGf4LvX1Lms7'
+playlist_URI = playlist_link.split('/')[-1].split('?')[0]
+
+data = []
+
+for track in sp.playlist_tracks(playlist_URI)['items']:
+    track_details = track['track']
+    track_uri = track_details['uri']
+    track_name = track_details['name']
+    artist_uri = track_details['artists'][0]['uri']
+    artist_info = sp.artist(artist_uri)
+    album_info = sp.album(track_details['album']['uri'])
+
+    audio_features = sp.audio_features(track_uri)[0]
+    audio_analysis = sp.audio_analysis(track_uri)
+
+    avg_segment_duration = sum(seg['duration'] for seg in audio_analysis['segments']) / len(audio_analysis['segments'])
+    avg_segment_loudness = sum(seg['loudness_max'] for seg in audio_analysis['segments']) / len(audio_analysis['segments'])
+    avg_segment_timbre = [sum(seg['timbre'][i] for seg in audio_analysis['segments']) / len(audio_analysis['segments']) for i in range(12)]
+    avg_section_tempo = sum(section['tempo'] for section in audio_analysis['sections']) / len(audio_analysis['sections'])
+
+    if audio_features:
+        track_data = {
+            'Track URI': track_uri,
+            'Track Name': track_name,
+            'Artist URI': artist_uri,
+            'Artist Name': track_details['artists'][0]['name'],
+            'Artist Popularity': artist_info['popularity'],
+            'Artist Genres': ', '.join(artist_info['genres']),
+            'Artist Followers': artist_info['followers']['total'],
+            'Album Name': track_details['album']['name'],
+            'Album Popularity': album_info['popularity'],
+            'Release Date': album_info['release_date'],
+            'Track Popularity': track_details['popularity'],
+            'Explicit': track_details['explicit'],
+            'Danceability': audio_features['danceability'],
+            'Energy': audio_features['energy'],
+            'Key': audio_features['key'],
+            'Loudness': audio_features['loudness'],
+            'Mode': audio_features['mode'],
+            'Speechiness': audio_features['speechiness'],
+            'Acousticness': audio_features['acousticness'],
+            'Instrumentalness': audio_features['instrumentalness'],
+            'Liveness': audio_features['liveness'],
+            'Valence': audio_features['valence'],
+            'Tempo': audio_features['tempo'],
+            'Duration_ms': audio_features['duration_ms'],
+            'Time Signature': audio_features['time_signature'],
+            'Average Segment Duration': avg_segment_duration,
+            'Average Segment Loudness': avg_segment_loudness,
+            'Average Segment Timbre': avg_segment_timbre,
+            'Average Section Tempo': avg_section_tempo
+        }
+        data.append(track_data)
+
+df = pd.DataFrame(data)
+df.to_csv('spotify_playlist_data_enriched.csv', index=False)
+print(df.head())
+"
+
+# Run the Python script in R
+py_run_string(spotipy_script)
+```
+
+```{r running api python script}
+spotipy_script <- "
+import spotipy
+from spotipy.oauth2 import SpotifyClientCredentials
+import pandas as pd
+
+client_id = '6a91a1da7e484e659532888e8ab5f8e2'
+client_secret = '9e57ca7e029c43caa47f77fe321a8767'
+client_credentials_manager = SpotifyClientCredentials(client_id=client_id, client_secret=client_secret)
+sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager)
+
+# URLs of the playlists
+liked_playlist_link = 'https://open.spotify.com/playlist/5s4m4kmikUzGf4LvX1Lms7'
+disliked_playlist_link = 'https://open.spotify.com/playlist/6cq1EaOcKqxCC0wjOXpAv3' 
+
+liked_playlist_URI = liked_playlist_link.split('/')[-1].split('?')[0]
+disliked_playlist_URI = disliked_playlist_link.split('/')[-1].split('?')[0]
+
+def fetch_tracks(playlist_URI, like_label, sp):
+    tracks_data = []
+    results = sp.playlist_tracks(playlist_URI)
+    for item in results['items']:
+        track_details = item['track']
+        track_uri = track_details['uri']
+        track_name = track_details['name']
+        artist_uri = track_details['artists'][0]['uri']
+        artist_info = sp.artist(artist_uri)
+        album_info = sp.album(track_details['album']['uri'])
+
+        audio_features = sp.audio_features(track_uri)[0]
+        audio_analysis = sp.audio_analysis(track_uri)
+
+        avg_segment_duration = sum(seg['duration'] for seg in audio_analysis['segments']) / len(audio_analysis['segments'])
+        avg_segment_loudness = sum(seg['loudness_max'] for seg in audio_analysis['segments']) / len(audio_analysis['segments'])
+        avg_segment_timbre = [sum(seg['timbre'][i] for seg in audio_analysis['segments']) / len(audio_analysis['segments']) for i in range(12)]
+        avg_section_tempo = sum(section['tempo'] for section in audio_analysis['sections']) / len(audio_analysis['sections'])
+
+        if audio_features:
+            track_data = {
+                'Track URI': track_uri,
+                'Track Name': track_name,
+                'Artist URI': artist_uri,
+                'Artist Name': track_details['artists'][0]['name'],
+                'Artist Popularity': artist_info['popularity'],
+                'Artist Genres': ', '.join(artist_info['genres']),
+                'Artist Followers': artist_info['followers']['total'],
+                'Album Name': track_details['album']['name'],
+                'Album Popularity': album_info['popularity'],
+                'Release Date': album_info['release_date'],
+                'Track Popularity': track_details['popularity'],
+                'Explicit': track_details['explicit'],
+                'Danceability': audio_features['danceability'],
+                'Energy': audio_features['energy'],
+                'Key': audio_features['key'],
+                'Loudness': audio_features['loudness'],
+                'Mode': audio_features['mode'],
+                'Speechiness': audio_features['speechiness'],
+                'Acousticness': audio_features['acousticness'],
+                'Instrumentalness': audio_features['instrumentalness'],
+                'Liveness': audio_features['liveness'],
+                'Valence': audio_features['valence'],
+                'Tempo': audio_features['tempo'],
+                'Duration_ms': audio_features['duration_ms'],
+                'Time Signature': audio_features['time_signature'],
+                'Average Segment Duration': avg_segment_duration,
+                'Average Segment Loudness': avg_segment_loudness,
+                'Average Segment Timbre': avg_segment_timbre,
+                'Average Section Tempo': avg_section_tempo,
+                'Liked': like_label
+            }
+            tracks_data.append(track_data)
+    return tracks_data
+
+liked_tracks = fetch_tracks(liked_playlist_URI, 1, sp)
+disliked_tracks = fetch_tracks(disliked_playlist_URI, 0, sp)
+all_tracks = liked_tracks + disliked_tracks
+
+df = pd.DataFrame(all_tracks)
+df.to_csv('spotify_playlist_data_labeled_alex.csv', index=False)
+print(df.head())
+"
+
+# Run the Python script in R
+py_run_string(spotipy_script)
+```
+
+```{r saving and reading csv file, echo=FALSE}
+df <- read.csv("spotify_playlist_data_labeled_alex.csv")
+print(df)
+folder_path <- "/Users/menten/Desktop/Machine Learning Project/data"
+file_path <- file.path(folder_path, "spotify_playlist_data_labeled_arthur.csv")
+
+# Save the DataFrame to the CSV file in the specified folder
+write.csv(df, file_path, row.names = FALSE)
+
+# Print confirmation
+cat("Data saved to:", file_path, "\n")
+```
+
+* Sources - ALEX 
+
+* Description - ALEX
+
+* Wrangling/cleaning - ARTHUR
+
+## First observation of the dataset
+```{r}
+head(df) # Get the first few instances of the dataset that we are working with, we can already see that we are going to drop the Tract URI (it's the link) and the Artist URI
+```
+
+## Displaying all columns we have access to
+```{r, echo=FALSE}
+colnames(df)
+```
+
+## Dropping irrelevant columns
+```{r}
+df <- df %>%
+  select(-Track.URI, -Artist.URI, -Average.Segment.Timbre)  # Dropping Artist and Song URLs
+head(df)
+```
+
+## Renaming columns in a more practical syntax
+```{r}
+df <- df %>%
+  rename(SongName = Track.Name,         
+         ArtistName = Artist.Name,      
+         AlbumName = Album.Name,        
+         AlbumReleaseDate = Release.Date,
+         ArtistPopularity = Artist.Popularity,
+         Genre = Artist.Genres, 
+         ArtistFollowers = Artist.Followers, 
+         AlbumPopularity = Album.Popularity, 
+         TrackPopularity = Track.Popularity, 
+         AvgSegDuration = Average.Segment.Duration, 
+         AvgSegLoudness = Average.Segment.Loudness, 
+         AvgSegTempo = Average.Section.Tempo,
+         TimeSignature = Time.Signature)  
+
+head(df)
+```
+
+## Output variable in first position in the dataset
+```{r}
+#Just want to move our output variable to be the first variable in the dataset
+df <- df %>% select(last_col(), everything())
+head(df)
+```
+
+## Cleaning
+### Checking for duplicate/missing values & dropping any of them
+
+```{r check for missing values}
+missing_values <- df %>%
+  summarize(across(everything(), ~sum(is.na(.))))
+print(missing_values)
+
+# Remove any rows that contain missing values
+df <- df %>%
+  drop_na()
+
+# Check for and remove duplicate rows
+df <- df %>%
+  distinct()
+
+# Print out the number of rows after cleaning to confirm changes
+print(paste("Rows after cleaning:", nrow(df)))
+
+# No missing values - not suprising considering that it's from Spotify...
+```
+
+### Checking for data types and making accurate changes if needed
+
+```{r checking data types}
+str(df)
+```
+```{r changing AlbumReleaseDate to date}
+df$AlbumReleaseDate <- as.Date(df$AlbumReleaseDate, format="%Y-%m-%d")
+head(df$AlbumReleaseDate)
+```
+
+### Column renaming
+
+```{r}
+# Calculate the age in days from Release Date to today
+df$AgeInDays <- as.integer(Sys.Date() - df$AlbumReleaseDate)
+# View the first few entries in the new AgeInDays column to confirm
+head(df[c("AlbumReleaseDate", "AgeInDays")])
+df$AlbumReleaseDate <- NULL  # This will delete the 'Duration_ms' column
+
+```
+
+### Column deletion
+Should we delete more of them? In the sense that we will probably not use them all...
+see in this example: https://blog.mlreview.com/spotify-analyzing-and-predicting-songs-58827a0fa42b
+```{r}
+df$Duration <- df$Duration_ms / 1000
+df$Duration_ms <- NULL  # This will delete the 'Duration_ms' column
+head(df)
+```
+```{r}
+head(df)
+```
+
+
+
+### Spotting mistakes/missing data & treating outliers
+=> I don't really think that treating outliers is relevant in our case since data are related to a subject on which the variability can be really really big and most of the time the biggest (ex: number of streams) and lowest (ex:ranking in top artist) can be the best ones. => See distributions in EDA
+
+```{r}
+library(tidyverse)
+
+# Fonction pour nettoyer chaque colonne
+clean_column <- function(data, column_name) {
+  # Affichage de la colonne en cours de traitement
+  cat("Cleaning column:", column_name, "\n")
+  
+  #Check for missing data
+  missing_values <- sum(is.na(data[[column_name]]))
+  cat("Missing values:", missing_values, "\n")
+  
+  #Deleting missing data
+  data <- data %>%
+    filter(!is.na(.data[[column_name]]))
+  
+  
+  #Displaying number of rows after cleaning
+  cat("Remaining rows after cleaning:", nrow(data), "\n\n")
+  
+  return(data)
+}
+
+#Applying function to each column
+cleaned_df <- df
+for (col in colnames(df)) {
+  cleaned_df <- clean_column(cleaned_df, col)
+}
+df <- cleaned_df
+```
+
+* EDA - ARTHUR
+
+#Comparing liked/disliked songs' characteristics distributions
+
+```{r}
+library(ggplot2)
+
+# Switching 'Liked' column to factor for easy visualization
+df$Liked <- factor(df$Liked, labels = c("Disliked", "Liked"))
+
+# Columns to compare
+columns_to_compare <- c('Energy', 'Danceability', 'Duration', 'Instrumentalness', 
+                        'Liveness', 'Acousticness', 'Speechiness', 'Tempo', 
+                        'TrackPopularity', 'Valence')
+
+# Building density plots for every column
+for (col in columns_to_compare) {
+  plot <- ggplot(df, aes(x = .data[[col]], fill = Liked)) +
+    geom_density(alpha = 0.5) +
+    labs(title = paste("Comparing", col, "between liked & disliked songs"),
+         x = col, y = "Density") +
+    theme_minimal() +
+    scale_fill_manual(values = c("orange", "lightblue"))
+  
+  print(plot)
+}
+
+```
+
+
+Looking at the distributions of each feature, there are clear distinctions between my Liked and Disliked songs, especially in the ENERGY, TEMP, DURATION, and LIVENESS features.
+
+ENERGY: Preference for a bit less energic songs
+TEMPO: Preference for songs between 100 & 120 bpm or around 160 (House/rap & techno?)
+DURATION: (to clean) Preference for songs that are a bit longer
+LIVENESS: Idk how to understand the value but clear preference for a low value of liveness
+
+=> We also could present this on a spider plot but I think that isolating each criterion can be relevant if we want to present
+
+
+
+

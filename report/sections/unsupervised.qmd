@@ -1,0 +1,14 @@
+```{r, message=FALSE, echo=FALSE}
+source(here::here("src/setup.R"))
+df_clean <- here::here("data", "df_clean")
+df_clean <- read_csv(df_clean)
+```
+
+# Unsupervised learning
+
+## K Means Clustering
+
+
+
+0]
+

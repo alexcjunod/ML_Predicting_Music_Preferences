@@ -1,0 +1,21 @@
+"0","library(reticulate)"
+"2","Warning: package ‘reticulate’ was built under R version 4.3.2"
+"0","library(here)"
+"2","here() starts at /Users/alexanderjunod/Library/CloudStorage/OneDrive-UniversitédeLausanne/Bureau/UNIL/MLBA/Machine Learning Project/report v2/report
+"
+"0","library(dplyr)"
+"2","
+Attaching package: ‘dplyr’
+
+"
+"2","The following objects are masked from ‘package:stats’:
+
+    filter, lag
+
+"
+"2","The following objects are masked from ‘package:base’:
+
+    intersect, setdiff, setequal, union
+
+"
+"0","library(tidyr)"

@@ -1,0 +1,42 @@
+```{r, echo = FALSE, message = FALSE}
+
+source(here::here("scripts/setup.R"))
+```
+
+::: h1-flex-container
+# Introduction {.title-with-lines}
+:::
+
+## Overview and Motivation
+
+Road accidents continue to be one of the leading causes of death and hospitalizations around the world. Many factors such as weather, driver behavior and demographics contribute to a substantial number of deaths worldwide each year (1.3M on average based on research conducted by the WHO) (World Health Organization, 2022). In 2018 alone, it was estimated that there was a road death every 22 seconds (World Health Organization, 2018). In the case of the UK in 2022, a road accident occurred every (xxx insert code) and more specifically a fatal accident every (xxx insert code). These road accidents remain extremely complicated and provide a great base of information in which we can put our data science toolkit to work, to discover and reveal hidden information on patterns and insights into what influences road safety.
+
+The motivation behind our project’s choice (UK Road Accident Analysis) is deeply rooted in personal experiences of the members of our group. Witnessing the life-altering consequences of road accidents firsthand has ignited our interest for understanding the factors that contribute to such accidents on the road. This emotional connection, combined with the fact that all our team members having to complete “Cours-2-phases” classes mandatory for our licenses, which explain the impacts of road accidents, has created a deep curiosity for the subject.
+
+Beyond the emotional and curiosity realm, our team recognizes that our selected data sets offer a wealth of tangible data, enabling us to explore various data science domains. This project will facilitate the enhancement of our descriptive, regression, and spatial-temporal analytical skills, empowering us to discern patterns and relationships within the data.
+
+
+
+## Objectives:
+
+Our project is centered on both comprehending and predicting road accident patterns within the UK for the year 2022. We are dividing our analysis more specifically into four key components to understand their individual impacts on road accidents in 2022 in the UK. The utilization of spatial analysis to identify and understand accident hotspots, examination of temporal trends, demographics and vehicle characteristics and their relation to accident severity. After pinpointing the key factors leading to road accidents and their impact on the severity of accidents, our next step is to attempt to build a predictive model. If accurate enough, this model could potentially predict the severity of an accident based on the variables in our dataset. This data science project is aimed to be an exercise for us to put our newly attained skills of exploratory data analysis, data analysis as well as statistical modeling to work. 
+
+
+### Research questions
+
+We began our project with a primary focus on investigating temporal, demographic, and vehicle trends in 2022. However, as we delved deeper into our research, we recognized the opportunity to add another dimension to our analysis by examining how these factors also influenced the severity of accidents. Therefore, our research questions had a dual purpose: firstly, to gain insights into the fundamental aspects of accidents, and secondly, to explore their impact on accident severity. This approach introduced added complexity to our analysis, but we believe it yielded even more intriguing insights from our complex datasets. 
+
+
+::: column-page-right
+[***a) Can we identify locations (geographical (coordinate based) and spatial (urban vs rural, highway vs one way road) that are more prone to accidents?***]{.underline}
+
+[***b) What temporal trends (time of day/month/week, seasonality) can we identify in road accidents in the UK ? Can we identify the most dangerous times to be on the road?***]{.underline}
+
+[***c) What are the most prevalent demographics (age, gender) and vehicles characteristics (engine size, electric vs petrol, etc.) of road accidents?***]{.underline}
+
+[***d) Can we predict the severity of an accident using significant variables in our dataset and validate its accuracy?***]{.underline}
+:::
+
+## Related Work
+
+*PART IS MISSING*

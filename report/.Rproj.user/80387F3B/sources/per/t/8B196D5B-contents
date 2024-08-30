@@ -1,0 +1,11 @@
+```{r}
+source(here::here("src/setup.R"))
+```
+
+# Exploratory data analysis
+
+* Mapping out the underlying structure
+* Identifying the most important variables
+* Univariate visualizations
+* Multivariate visualizations
+* Summary tables

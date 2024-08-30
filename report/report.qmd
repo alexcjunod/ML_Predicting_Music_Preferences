@@ -1,0 +1,69 @@
+---
+title: Skip or Replay? Predicting Song Preferences on Spotify Using Machine Learning (Group L)
+author:
+ - Junod, Alexander
+ - Leroy, Camille
+ - Menten, Arthur
+institute : Université de Lausanne - Faculty of Business and Economics (HEC)
+date: today
+title-block-banner: "#1DB954" #chosen for the university of lausanne
+toc: true
+toc-location: left
+execute: 
+  echo: false
+  warning: false
+  cache: true
+format: 
+  html:
+    number-sections: true
+    html-math-method: katex
+    self-contained: true
+    code-fold: true
+    code-summary: "Show the code"
+    code-tools: true
+    mainfont: "Times"
+    fontsize: 11pt
+    css: custom-styles.css
+    abstract: |
+      In our project, "Skip or Replay? Predicting Song Preferences on Spotify Using Machine Learning," we aimed to develop models that accurately
+      predict personal music preferences based on audio characteristics and metadata. Using the Spotify API, we compiled a dataset of 400 tracks 
+      from Spotify, each labeled with likes or dislikes to reflect individual musical preferences. This dataset included auditory attributes like
+      Tempo, Energy, and Danceability, alongside metadata such as Artist Popularity and Genre for each track. 
+      In our exploratory data analysis, we focused on understanding the distribution and relationship of 22 variables in relation to the 'Liked'
+      and 'Disliked' status of tracks. Key findings highlighted preferences for songs with higher Valence, lower Speechiness, and non-Explicit
+      lyrics. Principal Component Analysis revealed the complexity of our dataset, with significant variables showing clear influences on song
+      preferences, setting the stage for targeted predictive modeling. 
+      In our study, we divided our dataset into three subsets: training, validation and test. We used these subsets to assess the performance of
+      several baseline models. Specifically, we evaluated Logistic Regression, Classification Trees, SVM and Random Forests, along with a simple
+      Naïve baseline model for comparison. To ensure the robustness of our evaluations, we employed 5-fold cross-validation. All these models were
+      implemented using the caret package in R, which provides tools for model training, parameter tuning, and performance assessment. Logistic
+      Regression and Random Forest emerged as the most effective, demonstrating superior predictive capabilities using the Balanced Accuracy, Kapp
+      , Precision, Recall and AUC metrics. These models were chosen for hyperparameter tuning due to their ability to accurately differentiate
+      between Liked and Disliked songs. 
+      The tuning significantly improved the models' performance across all metrics demonstrating their robustness on both validation and test
+      datasets. Ultimately, both models exhibited strong ability to generalize to unseen data, with Logistic Regression showing slight improvements
+      in precision and Random Forest displaying notable gains in recall and overall predictive strength.
+      The machine learning model interpretation analysis revealed that both Logistic Regression and Random Forest models identified 'Valence',
+      'Explicit', ‘WordCount’, and ‘GenreCount' as key predictors in determining a song likability, demonstrating their consistent influence across
+      different modeling approaches, as well as validating our EDA findings. While Logistic Regression focused on these specific features,
+      highlighting their direct impact, the Random Forest model was able to detect subtler cues such as ‘Acousticness’ and 'AvgSegDuration',
+      showcasing its adeptness at handling complex interactions between features.
+      Building on this understanding, the analysis using Partial Dependence Plots (PDPs) further elucidated differences between the two models in
+      their approach to predicting song likability. Logistic Regression displayed a broad and more linear sensitivity to changes in features like
+      Valence, Explicitness and Instrumentalness, often showing clear almost linear trends in how probability changes with feature values (i.e., as
+      the variable increased the probability increased linearly). In contrast, Random Forest exhibited more consistent probabilities across these
+      features, demonstrating a robustness to individual feature changes and a superior capability to manage non-linear relationships and feature
+      interactions.
+
+
+    
+  # pdf: default # use this if you want to render pdfs instead
+---
+
+```{r, echo=FALSE,message=FALSE, warning=FALSE}
+# loading all the necessary packages
+source(here::here("src/setup.R"))
+```
+
+```{r child = paste0('sections/', c('intro.qmd', 'data.qmd','eda.qmd', 'supervised.qmd', 'concl.qmd', 'appendix.qmd'))}
+```

@@ -1,0 +1,3 @@
+"0","df <- df %>%"
+"0","  select(-Track.URI, -Artist.URI, -Average.Segment.Timbre)  # Dropping Artist and Song URLs"
+"0","head(df)"

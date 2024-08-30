@@ -1,0 +1,9 @@
+"0","folder_path <- ""/Users/menten/Desktop/Machine Learning Project/data"""
+"0","file_path <- file.path(folder_path, ""spotify_playlist_data_labeled_arthur.csv"")"
+"0",""
+"0","# Save the DataFrame to the CSV file in the specified folder"
+"0","write.csv(df, file_path, row.names = FALSE)"
+"2","Warning: cannot open file '/Users/menten/Desktop/Machine Learning Project/data/spotify_playlist_data_labeled_arthur.csv': No such file or directory"
+"2","Error in file(file, ifelse(append, ""a"", ""w"")) : 
+  cannot open the connection
+"

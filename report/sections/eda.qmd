@@ -1,0 +1,634 @@
+```{r, message=FALSE, echo=FALSE}
+source(here::here("src/setup.R"))
+df_clean <- here::here("data", "df_clean")
+df_clean <- read_csv(df_clean)
+```
+
+# Exploratory Data Analysis
+
+Once the dataset was prepared, we started an exploratory data analysis to gain initial insights into our dataset. This involved examining the distribution of variables based on **'Liked'** status and identifying any outliers. Additionally, we explored the underlying structure of our data by conducting Principal Component Analysis (PCA) to determine if simplification was possible as well as creating a correlation matrix.
+
+## Distribution and Comparison of Variables by Liked Status (Density/Histogram Plots)
+
+Initially, we analyzed the distribution of the 22 variables in our dataset, calculating the mean for each variable across the two **'Liked'** statuses. In other words, we wanted to understand which Features had the largest absolute value difference between our target variable. In the table below, we highlighted the top five variables that showed the greatest divergence in their means, which were found to be statistically different with p-value \>1%. The histo/density plots for all of the features can be found in the Appendix at the end of this report.
+
+```{r, echo=FALSE}
+#| column: page
+#| layout-ncol: 2
+#| fig-cap: 
+#|   - "Plot 1"
+#|   - "Plot 2"
+#|   - "Plot 3"
+#|   - "Plot 4"
+#|   - "Plot 5"
+
+calculate_stats <- function(df, var, group_var) {
+  df %>%
+    summarise(
+      mean_liked = mean(df[[var]][df[[group_var]] == 1], na.rm = TRUE),
+      mean_not_liked = mean(df[[var]][df[[group_var]] == 0], na.rm = TRUE),
+      t_test = list(t.test(df[[var]] ~ df[[group_var]]))
+    )
+}
+
+# Assuming df_clean is your DataFrame with the numeric columns and "Liked" status
+numeric_columns <- names(df_clean)[sapply(df_clean, is.numeric) & names(df_clean) != "Liked"]
+
+# Calculate stats for each numeric column
+stats <- map_dfr(numeric_columns, ~ calculate_stats(df_clean, .x, "Liked") %>%
+                   mutate(Variable = .x))
+
+# Extract p-values from t-test results
+stats <- stats %>%
+  mutate(p_value = map_dbl(t_test, ~ .x$p.value)) %>%
+  select(Variable, mean_liked, mean_not_liked, p_value)
+
+# Select top 5 variables based on smallest p-values
+top_5_vars <- stats %>% arrange(p_value) %>% head(5) %>% pull(Variable)
+
+# Remaining variables
+remaining_vars <- stats %>% filter(!Variable %in% top_5_vars) %>% pull(Variable)
+
+# Function to create and print density plots
+create_density_plot <- function(df, var, title) {
+  averages <- df %>%
+    group_by(Liked) %>%
+    summarise(Avg = mean(get(var), na.rm = TRUE)) %>%
+    mutate(Liked = as.factor(Liked))
+  
+  plot <- ggplot(df, aes_string(x = var, fill = "factor(Liked)")) +
+    geom_histogram(aes(y = after_stat(density)), fill = "grey", color = "black", bins = 30) +
+    geom_density(alpha = 0.5, aes(color = factor(Liked), fill = factor(Liked))) +
+    geom_vline(data = averages, aes(xintercept = Avg, color = Liked), linetype = "dashed", size = 1) +
+    labs(title = title, x = var, y = "Density") +
+    theme_minimal() +
+    scale_fill_manual(values = c("#FE4A49", "#3C6E71")) +
+    scale_color_manual(values = c("#FE4A49", "#3C6E71")) +
+    guides(fill = guide_legend(title = "Liked Status"), color = guide_legend(title = "Liked Status"))
+  
+  print(plot)
+}
+
+# Generate plots for top 5 variables
+for (var in top_5_vars) {
+  create_density_plot(df_clean, var, paste("Distribution and Comparison of", var, "by Liked Status"))
+}
+```
+
+-   **Plot 1** illustrates the distribution of valence, which measures musical positiveness, for our two categories: Liked and Disliked songs. The red histogram and density plot represent disliked songs, while the blue ones represent liked songs. Liked songs peak around 0.7 valence, suggesting a preference for happier, more positive-sounding tracks. The mean valence for disliked songs is approximately 0.4, whereas for liked songs it is around 0.6, suggesting that higher valence is associated with a higher likelihood of a song being liked.
+
+-   **Plot 2** illustrates the distribution of Speechiness, which measures the presence of spoken words in a track. The mean Speechiness for disliked songs is approximately 0.1, whereas for liked songs it is around 0.05, suggesting that lower Speechiness is associated with a higher likelihood of a song being liked. This indicates a preference for music with fewer spoken words such as Dance music for example.
+
+-   **Plot 3** illustrates the distribution of Explicit content, a categorical variable indicating the presence of Explicit lyrics within a track. Given its categorical nature, the songs are distributed on either side of the histogram, with a larger proportion on the non-Explicit side (Explicit = 0) The mean explicit value for liked songs is approximately 0.05, indicating a clear preference for songs without Explicit lyrics. This suggests that songs with non-explicit content are significantly more likely to be favored.
+
+-   **Plot 4** illustrates the distribution of GenreCount, which represents the number of genres associated with each song, for liked and disliked songs. A higher GenreCount might indicate that a song is less mainstream and more specific, such as "Deep Symphonic Black Metal". For liked songs, the mean GenreCount is approximately 2.5, suggesting a preference for songs with fewer genres. This implies that songs associated with fewer genres, and with a potentially more mainstream appeal, are more likely to be liked.
+
+-   **Plot 5** illustrates the distribution of WordCount, representing the number of words in song titles, for liked and disliked songs. Both distributions show a high concentration at lower word counts, however, the mean WordCount for liked songs is approximately 2.5, indicating a preference for shorter titles, suggesting that songs with fewer words in their titles are more likely to be liked.
+
+```{r top tracks, message=FALSE, echo=FALSE, results='hold', warning=FALSE, eval=FALSE}
+top_tracks <- df_clean %>%
+  arrange(desc(TrackPopularity)) %>%  # Sort by descending order of popularity
+  select(SongName, ArtistName, TrackPopularity, Liked) %>%  # Select relevant columns
+  head(10)  # Get the top 10 tracks
+
+# Create a gt table
+top_tracks_table <- gt(top_tracks) %>%
+  tab_header(
+    title = "Top 10 Tracks",
+    subtitle = "Sorted by Track Popularity"
+  ) %>%
+  cols_label(
+    SongName = "Song Name",
+    ArtistName = "Artist Name",
+    TrackPopularity = "Popularity",
+    Liked = "Liked by User"
+  ) %>%
+  fmt_number(
+    columns = vars(TrackPopularity),
+    decimals = 0
+  ) %>%
+  tab_style(
+    style = list(
+      cell_text(weight = "bold"),
+      cell_fill(color = "lightgray")
+    ),
+    locations = cells_column_labels(columns = TRUE)
+  ) %>%
+  tab_options(
+    table.font.size = px(12),
+    column_labels.font.size = px(14),
+    heading.title.font.size = px(16),
+    heading.subtitle.font.size = px(12)
+  )
+
+# Print the gt table
+#print(top_tracks_table)
+top_tracks_table
+```
+
+```{r top genres, message=FALSE, echo=FALSE, results='hide', warning=FALSE, eval=FALSE}
+# First, calculate a popularity threshold for the top 20%
+popularity_threshold <- quantile(df_clean$TrackPopularity, 0.8)
+
+# Now, filter tracks above this threshold and count by genre
+popular_music_by_genre <- df_clean %>%
+  filter(TrackPopularity >= popularity_threshold) %>%
+  count(Genre, sort = TRUE)  # Count the number of tracks per genre and sort
+
+# Create a gt table
+popular_music_table <- gt(popular_music_by_genre) %>%
+  tab_header(
+    title = "Popular Music by Genre",
+    subtitle = "Tracks Above the Top 20% Popularity Threshold"
+  ) %>%
+  cols_label(
+    Genre = "Genre",
+    n = "Number of Tracks"
+  ) %>%
+  tab_style(
+    style = list(
+      cell_text(weight = "bold"),
+      cell_fill(color = "lightgray")
+    ),
+    locations = cells_column_labels(columns = TRUE)
+  ) %>%
+  tab_options(
+    table.font.size = px(12),
+    column_labels.font.size = px(14),
+    heading.title.font.size = px(16),
+    heading.subtitle.font.size = px(12)
+  )
+
+# Print the gt table
+#print(popular_music_table)
+popular_music_table
+```
+
+## Multi-columned Box-plots per Feature: Identifying Trends & Outliers
+
+```{r, eval=FALSE, echo=FALSE}
+num_cols <- df_clean %>% 
+  select_if(is.numeric)
+
+# Create a function to plot each column separately
+plot_boxplot <- function(data, column) {
+  p <- ggplot(data, aes_string(x = "1", y = column)) +  # aes_string allows dynamic naming of axes
+    geom_boxplot() +
+    labs(title = paste("Boxplot of", column), y = column, x = "") +
+    theme_minimal() +
+    theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())  # Remove x-axis elements
+  print(p)
+}
+
+# Apply the function to each numerical column
+num_cols %>%
+  names() %>%
+  walk(~plot_boxplot(df_clean, .))
+```
+
+```{r boxplots, echo=FALSE}
+#| layout-nrow: 1
+#| column: page
+
+numeric_data <- df_clean %>%
+  select(where(is.numeric), Liked)  # Keep 'Liked' and all numeric columns
+
+long_data <- numeric_data %>%
+  pivot_longer(
+    cols = -Liked,  # Exclude the Liked column from the transformation
+    names_to = "variable",  # Name of the new variable column
+    values_to = "value"  # Name of the new value column
+  ) %>%
+  mutate(Label = ifelse(Liked == 1, "Liked", "Disliked"))  # Create a label for coloring
+
+# Define custom colors for the plot
+custom_colors <- c("Liked" = "#3C6E71", "Disliked" = "#FE4A49")  # Change these hex codes to desired colors
+
+# Determine the split point for the variables
+variables <- unique(long_data$variable)
+split_point <- ceiling(length(variables) / 2)
+first_half <- variables[1:split_point]
+second_half <- variables[(split_point + 1):length(variables)]
+
+# Create the boxplot for the first half
+p1 <- ggplot(data = filter(long_data, variable %in% first_half), aes(x = Label, y = value, fill = Label)) + 
+  geom_boxplot() +
+  scale_fill_manual(values = custom_colors) +
+  facet_wrap(~ variable, scales = "free") +
+  labs(title = "Distribution of Features by Liked Status (Part 1)", y = "Value", x = "") +
+  theme_minimal() +
+  theme(legend.position = "none",
+        strip.background = element_blank(),
+        strip.text.x = element_text(size = 10))
+
+# Create the boxplot for the second half
+p2 <- ggplot(data = filter(long_data, variable %in% second_half), aes(x = Label, y = value, fill = Label)) + 
+  geom_boxplot() +
+  scale_fill_manual(values = custom_colors) +
+  facet_wrap(~ variable, scales = "free") +
+  labs(title = "Distribution of Features by Liked Status (Part 2)", y = "Value", x = "") +
+  theme_minimal() +
+  theme(legend.position = "none",
+        strip.background = element_blank(),
+        strip.text.x = element_text(size = 10))
+
+# Print the plots
+print(p1)
+print(p2)
+```
+
+Using multi-column boxplots (single boxplot column per target variable) revealed several significant insights into the features that differentiate Liked and Disliked tracks. The detailed statistical differences allowed us to understand more about the features of the tracks influencing track likability.
+
+Liked tracks typically had higher levels of Acousticness and were often older, with a broader age range, indicating a preference for classic, well-established music. These tracks fell into fewer genres, suggesting a preference for music with more distinct genre characteristics or in other words more "black and white".
+
+Explicit content was a strong indicator (as seen in the density plots above), as Liked tracks being much less likely to contain explicit lyrics. This trend was also seen in lower Speechiness levels, indicating a preference for songs with less spoken content. Additionally,  instrumentalness was also lower in Liked tracks, implying a preference for songs with vocal elements.
+
+In terms of Energy and Danceability, Liked tracks exhibited higher values, indicating a preference for more energetic and danceable music. Liked tracks tend to have a higher Tempo (smaller IQR than for Disliked tracks) and Valence, suggesting a favor for dynamic and positive-sounding tracks.
+
+Popularity metrics such as Album Popularity, Artist Followers, and Artist Popularity also showed that disliked tracks were often associated with more popular albums and artists. The boxplots highlighted significant outliers in these metrics, as well as in Loudness, underscoring the subjective nature of musical preferences. We chose to retain these outliers in our analysis as they reflect real-world data, enabled the capture of deeper insights, and removing them would have substantially reduced the size of our dataset.
+
+::: {.callout-note title="Click To See Detailed Feature Intepretations For All Features" collapse="true" appearance="simple"}
+| **Variable**         | **Liked**                                                      | **Disliked**                                                   | **Interpretation**                                                                                     |
+|----------------------|----------------------------------------------------------------|----------------------------------------------------------------|--------------------------------------------------------------------------------------------------------|
+| **Acousticness**     | Median = 0.140, IQR = 0.032 to 0.342, Mean = 0.222             | Median = 0.062, IQR = 0.00539 to 0.274, Mean = 0.184           | Liked tracks have higher acousticness, suggesting a preference for tracks with more acoustic elements. |
+| **AgeInDays**        | Median = 1680, IQR = 348 to 9110, Mean = 5580                  | Median = 1820, IQR = 125 to 5220, Mean = 3360                  | Liked tracks are generally older, indicating a preference for more classic tracks.                     |
+| **AlbumPopularity**  | Median = 56, IQR = 42.8 to 65, Mean = 52.3                     | Median = 64, IQR = 48 to 72, Mean = 58.0                       | Disliked tracks tend to come from more popular albums.                                                 |
+| **ArtistFollowers**  | Median = 2.46e+06, IQR = 3.87e+05 to 8.32e+06, Mean = 8.16e+06 | Median = 7.25e+06, IQR = 1.12e+06 to 1.46e+07, Mean = 1.59e+07 | Disliked tracks are associated with artists having a higher number of followers.                       |
+| **ArtistPopularity** | Median = 69, IQR = 59 to 75, Mean = 65.6                       | Median = 74.5, IQR = 62.8 to 78, Mean = 69.7                   | Disliked tracks generally have higher artist popularity.                                               |
+| **AvgSegDuration**   | Median = 0.262, IQR = 0.243 to 0.286, Mean = 0.265             | Median = 0.255, IQR = 0.228 to 0.299, Mean = 0.267             | Average segment duration is consistent across liked and disliked tracks.                               |
+| **AvgSegLoudness**   | Median = -6.83, IQR = -9.41 to -4.99, Mean = -7.51             | Median = -7.07, IQR = -9.14 to -5.24, Mean = -7.63             | Liked tracks are slightly louder on average.                                                           |
+| **AvgSegTempo**      | Median = 123, IQR = 111 to 134, Mean = 126                     | Median = 120, IQR = 98.9 to 133, Mean = 118                    | Liked tracks tend to have a higher tempo.                                                              |
+| **Danceability**     | Median = 0.681, IQR = 0.586 to 0.749, Mean = 0.665             | Median = 0.644, IQR = 0.522 to 0.773, Mean = 0.640             | Liked tracks are more danceable.                                                                       |
+| **Duration**         | Median = 186, IQR = 166 to 232, Mean = 206                     | Median = 210, IQR = 179 to 256, Mean = 219                     | Liked tracks are generally shorter in duration.                                                        |
+| **Energy**           | Median = 0.724, IQR = 0.581 to 0.825, Mean = 0.698             | Median = 0.698, IQR = 0.536 to 0.855, Mean = 0.680             | Liked tracks are slightly higher in energy.                                                            |
+| **Explicit**         | Median = 0, IQR = 0 to 0, Mean = 0.065                         | Median = 0, IQR = 0 to 0, Mean = 0.405                         | Liked tracks are less likely to be explicit.                                                           |
+| **GenreCount**       | Median = 2, IQR = 1 to 3, Mean = 2.62                          | Median = 3, IQR = 2 to 5, Mean = 3.31                          | Liked tracks are associated with fewer genres.                                                         |
+| **Instrumentalness** | Median = 5.03e-06, IQR = 0 to 0.00023, Mean = 0.0151           | Median = 1.38e-05, IQR = 0 to 0.00386, Mean = 0.0690           | Liked tracks have lower instrumentalness.                                                              |
+| **Key**              | Median = 6, IQR = 2 to 9, Mean = 5.62                          | Median = 5, IQR = 2 to 8, Mean = 5.22                          | The key distribution is fairly similar between liked and disliked tracks.                              |
+| **Liveness**         | Median = 0.116, IQR = 0.0903 to 0.234, Mean = 0.183            | Median = 0.119, IQR = 0.0969 to 0.232, Mean = 0.192            | Liveness is similar across both groups.                                                                |
+| **Loudness**         | Median = -5.98, IQR = -8.32 to -4.81, Mean = -6.80             | Median = -5.96, IQR = -7.51 to -4.44, Mean = -6.32             | Liked tracks are generally quieter compared to disliked tracks.                                        |
+| **Mode**             | Median = 1, IQR = 0 to 1, Mean = 0.635                         | Median = 1, IQR = 0 to 1, Mean = 0.580                         | Liked tracks are more likely to be in a major mode.                                                    |
+| **Speechiness**      | Median = 0.0475, IQR = 0.0364 to 0.0734, Mean = 0.0689         | Median = 0.0761, IQR = 0.0412 to 0.174, Mean = 0.119           | Liked tracks have lower speechiness.                                                                   |
+| **Tempo**            | Median = 124, IQR = 114 to 134, Mean = 127                     | Median = 123, IQR = 98.9 to 134, Mean = 119                    | Liked tracks have a higher tempo.                                                                      |
+| **TimeSignature**    | Median = 4, IQR = 4 to 4, Mean = 3.93                          | Median = 4, IQR = 4 to 4, Mean = 3.96                          | Time signature distribution is similar between both groups.                                            |
+| **TrackPopularity**  | Median = 62, IQR = 44.8 to 73.2, Mean = 57.8                   | Median = 69, IQR = 53 to 78, Mean = 63.9                       | Disliked tracks tend to be more popular overall.                                                       |
+| **Valence**          | Median = 0.476, IQR = 0.217 to 0.722, Mean = 0.507             | Median = 0.369, IQR = 0.150 to 0.599, Mean = 0.386             | Liked tracks tend to have higher valence, indicating a preference for happier-sounding tracks.         |
+:::
+
+## Principal Component Analysis (Unsupervised Section)
+
+To gain insights into the underlying structure of our data, we conducted a Principal Component Analysis (PCA), which simplified the complexity of the dataset through the use of dimension reduction while preserving the most important information (Dey, 2023). The primary results are shown in the Screeplot below.
+
+```{r PCA, echo=FALSE, message=FALSE, results='hide'}
+df_numeric <- df_clean %>%
+  select(where(is.numeric)) %>%  # Automatically select only numeric columns
+  mutate(across(everything(), scale))  # Scale all selected numeric columns
+
+# Run PCA
+df_pca <- PCA(df_numeric, graph = FALSE)
+
+# Print PCA results
+print(df_pca)
+
+# Visualizing PCA: Scree plot to see the variance explained by each principal component
+#fviz_eig(df_pca, addlabels = TRUE, ncp = 11)  # Adjust 'ncp' as necessary
+#fviz_pca_var(df_pca)
+
+# Visualizing PCA: Biplot to see loadings and scores
+# Enhancing biplot with color coding for Liked/Disliked
+#liked_status <- df_clean$Liked  # Assuming 'Liked' is the binary indicator
+#liked_colors <- ifelse(liked_status == 1, "Liked", "Disliked")  # Use direct labels for colors
+
+#fviz_pca_biplot(df_pca,
+     #           geom = "point",  # Add points
+    #            col.ind = liked_colors,  # Color by liked status
+   #             addEllipses = FALSE,  # Remove confidence ellipses
+  #              legend.title = "Liked Status",
+ #               palette = c("Disliked" = "#FE4A49", "Liked" = "#3C6E71"))  # Define the palette if necessary
+
+# Visualize variable contributions to the principal components
+#fviz_contrib(df_pca, choice = "var", axes = 1)  # For PC1 contributions, change 'axes' for other PCs
+#fviz_contrib(df_pca, choice = "var", axes = 2)  # For PC2 contributions, change 'axes' for other PCs
+```
+
+The scree plot revealed that capturing approximately 70-80% (general rule of thumb for PCA (Elitsa Kaloyanova, n.d.) ) of the variance requires at least 10 dimensions. This finding suggested that our dataset was inherently high-dimensional, containing complex structures and relationships that couldn't be easily reduced to just a few dimensions without significant information loss. Furthermore, the need for 10 dimensions indicated that there was minimal redundancy among the features and that many variables provided unique information as well as represented different audio insights essential for a comprehensive analysis. However, although using principal components instead of actual features could have been advantageous for datasets with 50-100 variables, in our case, with only about 22 variables, it was not beneficial to lose the original dimensionality of our dataset.
+
+::: {.callout-note appearance="simple" title="Learn more about PCA" collapse="true"}
+The following brief PCA explanation is based on the wonderful PCA articles linked below:\
+
+Principal Component Analysis (PCA) is a powerful statistical method used in machine learning to simplify complex data while preserving its essential parts. It helps in making the data easier to explore and visualize by reducing the number of variables without losing critical information (variance). This makes PCA incredibly useful for boosting the efficiency of algorithms and enhancing data visualization.
+
+Understanding PCA helps you find the most important patterns in the data and express them as a combination of new variables, called principal components. These components are sorted so the most important ones come first. They are derived by reorienting the axis of the data towards where it varies the most. This method starts by analyzing the data's spread (covariance) and identifying the directions (eigenvectors) that capture the most variation. These directions become a new, simpler way to look at your data, making it easier to analyze and visualize complex datasets.
+
+For a deeper dive into PCA, consider the following resources:
+
+Roshmita Dey's article on Medium, "[Understanding Principal Component Analysis (PCA)](https://medium.com/@roshmitadey/understanding-principal-component-analysis-pca-d4bb40e12d33)", provides a beginner-friendly overview that emphasizes the intuition and foundational math behind PCA. The guide from Towards Data Science, "[Principal Component Analysis: Everything You Need to Know](https://towardsdatascience.com/principal-component-analysis-everything-you-need-to-know-5f834c9eaa83)", discusses practical applications and includes a step-by-step walkthrough of PCA. Aimonk's piece, "[Principal Component Analysis (PCA) in Machine Learning](https://medium.com/aimonks/principal-component-analysis-pca-in-machine-learning-407224cb4527)" on Medium, explores the relevance and application of PCA in machine learning.
+:::
+
+```{r}
+fviz_pca_var(df_pca)
+```
+
+In the figure below, the two axes---Dim1 and Dim2---represent the first two principal components, together accounting for 30% of the variance in our dataset, with Dim1 explaining 17.8% and Dim2 explaining 12.2%. This graph illustrates that variables pointing in the same direction, such as "Valence" and "Energy," are positively correlated, while those pointing in opposite directions, like "Acousticness" and "Energy," indicate negative correlations. Variables at 90 degrees to each other, such as "Valence" and "Acousticness," are uncorrelated. The importance of each variable in explaining the variance can be observed by their distance from the center of the plot with variables located further from the origin having a greater influence on the overall variance of the dataset. This graph provided an initial understanding of how variables interrelate and their respective contributions to the variance within the dataset.
+
+```{r}
+# Visualize variable contributions to the principal components
+fviz_contrib(df_pca, choice = "var", axes = 1)  # For PC1 contributions, change 'axes' for other PCs
+fviz_contrib(df_pca, choice = "var", axes = 2)  # For PC2 contributions, change 'axes' for other PCs
+```
+
+In the two figures above, we can see a detailed breakdown of how each variable contributed to Dimension 1 and Dimension 2.
+
+```{r}
+# Visualizing PCA: Biplot to see loadings and scores
+# Enhancing biplot with color coding for Liked/Disliked
+liked_status <- df_clean$Liked  # Assuming 'Liked' is the binary indicator
+liked_colors <- ifelse(liked_status == 1, "Liked", "Disliked")  # Use direct labels for colors
+
+fviz_pca_biplot(df_pca,
+                geom = "point",  # Add points
+                col.ind = liked_colors,  # Color by liked status
+                addEllipses = FALSE,  # Remove confidence ellipses
+                legend.title = "Liked Status",
+                palette = c("Disliked" = "#FE4A49", "Liked" = "#3C6E71"))  # Define the palette if necessary
+```
+
+```{r univariate single graphs, eval=FALSE, echo=FALSE}
+#| column: page
+#| layout-nrow: 8
+numeric_columns <- names(df_clean)[sapply(df_clean, is.numeric)]
+
+# Generate plots for each numeric variable
+for (col in numeric_columns) {
+  if (col != "Liked") {
+    # Calculate averages for each Liked status
+    averages <- df_clean %>%
+      group_by(Liked) %>%
+      summarise(Avg = mean(get(col), na.rm = TRUE)) %>%
+      mutate(Liked = as.factor(Liked))  # Ensure Liked is a factor for aesthetics
+
+    # Combined Histogram and Density Plot with Averages
+    plot <- ggplot(df_clean, aes_string(x = col, fill = "factor(Liked)")) +
+      geom_histogram(aes(y = after_stat(density)), fill = "grey", color = "black", bins = 30) +  # Histogram for overall distribution
+      geom_density(alpha = 0.5, aes(color = factor(Liked), fill = factor(Liked))) +  # Density plots with color
+      geom_vline(data = averages, aes(xintercept = Avg, color = Liked), linetype = "dashed", size = 1) +  # Average lines
+      labs(title = paste("Distribution and Comparison of", col, "by Liked Status"),
+           x = col, y = "Density") +
+      theme_minimal() +
+      scale_fill_manual(values = c("#FE4A49", "#3C6E71")) +  # Colors for the fill of density plot
+      scale_color_manual(values = c("#FE4A49", "#3C6E71")) +  # Colors for the density lines
+      guides(fill=guide_legend(title="Liked Status"), color=guide_legend(title="Liked Status"))  # Adjust the legend for clarity
+
+    # Print the plot
+    print(plot)
+  }
+}
+```
+
+```{r, eval=FALSE}
+# Columns to compare
+columns_to_compare <- c('Energy', 'Danceability', 'Duration', 'Instrumentalness', 
+                        'Liveness', 'Acousticness', 'Speechiness', 'Tempo', 
+                        'TrackPopularity', 'Valence')
+
+# Calculating means for each column grouped by Liked status
+means_data <- df_clean %>%
+  pivot_longer(cols = columns_to_compare, names_to = "Characteristic", values_to = "Value") %>%
+  group_by(Liked, Characteristic) %>%
+  summarise(Mean = mean(Value, na.rm = TRUE), .groups = 'drop')
+
+# Map numeric values to labels for clarity in the plot
+means_data$Liked <- factor(means_data$Liked, levels = c(0, 1), labels = c("Disliked", "Liked"))
+
+# Creating a combined horizontal bar plot with facets for each characteristic
+plot <- ggplot(means_data, aes(x = Mean, y = Liked, fill = Liked)) +
+  geom_bar(stat = "identity", position = position_dodge(), height = 0.5) +
+  facet_wrap(~ Characteristic, scales = "free_x") +
+  labs(title = "Mean Values of Song Characteristics by Liked Status",
+       x = "Mean Value", y = "Liked Status") +
+  theme_minimal() +
+  scale_fill_manual(values = c("#3C6E71", "#FE4A49"), labels = c("Disliked", "Liked")) +
+  theme(legend.title = element_blank(),  # Removes the legend title
+        axis.title.y = element_blank(),  # Removes the Y-axis title
+        plot.title = element_text(size = 16, face = "bold"),  # Bolder plot title
+        strip.background = element_blank(),  # Removes the background of the facet labels
+        strip.text = element_text(face = "bold"))  # Bolder facet labels
+
+print(plot)
+```
+
+In the graph above , we incorporated data showing how each song, categorized as either "Liked" or "Disliked," aligned with the attributes associated with our two principal dimensions. According to the graph, "Liked" songs predominantly clustered on the negative side of Dim1. For instance, this suggested a higher association with variables such as "Energy" and "Valence," and a lower association with "Explicitness". These findings were in line with our observations in the muti-column boxplot as well as in the density plots.
+
+During the interpretation of our model, it will be interesting to see if these features have a large impact on the predictability of our models.
+
+## Correlation Matrix
+
+To build further upon our PCA analysis, we constructed a heatmap to visualize the correlations among our 22 features. The heatmap predominantly displayed white and light colors, which, consistent with our PCA findings, indicated that most features had little correlation and thus contributed unique information to our dataset (and therefore models).
+
+```{r}
+cor_matrix <- cor(df_clean[sapply(df_clean, is.numeric)])  # Compute correlation matrix for numeric columns
+corrplot(cor_matrix, method = "color", order = "hclust", 
+         tl.col = "black", tl.srt = 45)  # Text label color and rotation
+```
+
+```{r, echo=FALSE, eval=FALSE}
+# Assuming 'df_clean' is your data frame and 'Liked' is included as a numeric column
+cor_matrix <- cor(df_clean[sapply(df_clean, is.numeric)])  # Compute correlation matrix for numeric columns
+
+# Flatten the matrix and remove self-correlations
+cor_data <- as.data.frame(as.table(cor_matrix))
+cor_data <- cor_data[cor_data$Var1 != cor_data$Var2, ]
+
+# Filter out duplicates
+cor_data <- cor_data[!duplicated(t(apply(cor_data, 1, sort))), ]
+
+# Sort by the absolute values of correlations to handle both positive and negative
+cor_data <- cor_data[order(-abs(cor_data$Freq)), ]
+
+# Top 5 positive correlations
+top_positive <- head(cor_data[cor_data$Freq > 0, ], 10)
+
+# Top 5 negative correlations
+top_negative <- head(cor_data[cor_data$Freq < 0, ], 10)
+
+# Combine the top positive and negative correlations for display
+top_correlations <- rbind(
+  data.frame(Category = "Positive", top_positive),
+  data.frame(Category = "Negative", top_negative)
+)
+
+# Create a gt table
+gt_table <- gt(top_correlations) %>%
+  tab_header(
+    title = "Top 5 Positive and Negative Correlations"
+  ) %>%
+  cols_label(
+    Category = "Correlation Type",
+    Var1 = "Variable 1",
+    Var2 = "Variable 2",
+    Freq = "Correlation Coefficient"
+  ) %>%
+  fmt_number(
+    columns = vars(Freq),
+    decimals = 2
+  ) %>%
+  tab_style(
+    style = list(
+      cell_fill(color = "#B3B3B3"),
+      cell_text(weight = "bold")
+    ),
+    locations = cells_column_labels(columns = TRUE)
+  ) %>%
+  tab_options(
+    column_labels.border.bottom.color = "black"
+  )
+
+# Print the gt table
+print(gt_table)
+```
+
+Nonetheless, we focused our attention on areas of the heat map that showed slightly more intense colors, indicating stronger positive or negative correlations between specific features. To enhance our understanding of the variables in the dataset and the underlying patterns in music, we chose to examine the five strongest correlations, which can be seen in the figures presented below.
+
+```{r}
+#| column: page
+#| layout-ncol: 3
+#| fig-cap: 
+#|   - "Plot 1"
+#|   - "Plot 2"
+#|   - "Plot 3"
+#|   - "Plot 4"
+#|   - "Plot 5"
+
+df_numeric <- df_clean %>%
+  select(Acousticness, Energy, Danceability, AvgSegDuration, Speechiness, Explicit, Energy, Loudness, Instrumentalness, ArtistPopularity) %>%
+  mutate(across(where(is.numeric), scale))  # Scale numeric columns
+
+# Create a cloud plot for Acousticness vs Energy with a regression line
+ggplot(df_numeric, aes(x = Acousticness, y = Energy)) +
+  geom_point(alpha = 0.6) +  # Adjust transparency with alpha
+  geom_smooth(method = "lm", color = "#1DB954", se = TRUE) +  # Add linear regression line with confidence interval
+  theme_minimal() +
+  labs(title = "Cloud Plot of Acousticness vs Energy",
+       x = "Acousticness", y = "Energy")
+
+# Create a cloud plot for Danceability vs AvgSegDuration with a regression line
+ggplot(df_numeric, aes(x = Danceability, y = AvgSegDuration)) +
+  geom_point(alpha = 0.6) +  # Adjust transparency with alpha
+  geom_smooth(method = "lm", color = "#1DB954", se = TRUE) +  # Add linear regression line with confidence interval
+  theme_minimal() +
+  labs(title = "Cloud Plot of Danceability vs AvgSegDuration",
+       x = "Danceability", y = "AvgSegDuration")
+
+# Create a cloud plot for Acousticness vs Energy with a regression line
+ggplot(df_numeric, aes(x = Speechiness, y = Explicit)) +
+  geom_point(alpha = 0.6) +  # Adjust transparency with alpha
+  geom_smooth(method = "lm", color = "#1DB954", se = TRUE) +  # Add linear regression line with confidence interval
+  theme_minimal() +
+  labs(title = "Cloud Plot of Speechiness vs Explicit",
+       x = "Speechiness", y = "Explicit")
+
+# Create a cloud plot for Acousticness vs Energy with a regression line
+ggplot(df_numeric, aes(x = Energy, y = Loudness)) +
+  geom_point(alpha = 0.6) +  # Adjust transparency with alpha
+  geom_smooth(method = "lm", color = "#1DB954", se = TRUE) +  # Add linear regression line with confidence interval
+  theme_minimal() +
+  labs(title = "Cloud Plot of Energy vs Loudness",
+       x = "Energy", y = "Loudness")
+
+
+# Create a cloud plot for Danceability vs AvgSegDuration with a regression line
+ggplot(df_numeric, aes(x = Instrumentalness, y = ArtistPopularity)) +
+  geom_point(alpha = 0.6) +  # Adjust transparency with alpha
+  geom_smooth(method = "lm", color = "#1DB954", se = TRUE) +  # Add linear regression line with confidence interval
+  theme_minimal() +
+  labs(title = "Cloud Plot of Instrumentalness vs ArtistPopularity",
+       x = "Instrumentalness", y = "ArtistPopularity")
+```
+
+Based on the presence of the regression lines and the distribution of data points, we derived a few key insights from the generated cloud plots above. (N.B: the reason why the categorical variable Explicit is not equal to 0 and 1 is due to the fact that the data was scaled in order to be able to plot them on the scatterplot)
+
+1.  **Acousticness vs Energy:**
+
+-   **Negative Correlation:** Research confirms that Acousticness and Energy in music tracks typically show a negative correlation. This relationship is logical, as acoustic tracks, which often feature natural and softer sounds, tend to have lower energy levels. Conversely, tracks with higher energy usually incorporate amplified and more dynamic sounds, reducing the acoustic quality. This contrast is evident in various music analysis studies that explore the characteristics influencing a song's mood and intensity (Peterson, 2021/2021)(Classifying Genres in R Using Spotify Data, 2019).
+
+2.  **Danceability vs AvgSegDuration:**
+
+-   **Negative Correlation:** Analysis of danceable music shows a trend where tracks with higher Danceability often feature shorter and more repetitive segments. This characteristic makes the music catchier and easier to dance to, which aligns with findings that shorter segments can enhance a song's rhythmic appeal and accessibility to listeners. The quicker, repetitive beats are more likely to sustain a listener's attention and promote physical movement, which is crucial for dance music.
+
+3.  **Speechiness vs Explicit:**
+
+-   **Positive Correlation:** A significant positive correlation between Speechiness and explicit content is observed, particularly because tracks with higher Speechiness often contain more lyrics and spoken words, which increases the likelihood of explicit content. This correlation is particularly strong in genres like hip-hop or rap, where verbal expression is a central element, and explicit language is more common. The analysis confirms that as Speechiness increases, so does the probability of a track containing explicit words.
+
+4.  **Energy vs Loudness:**
+
+-   **Positive Correlation:** It's well established that there is a strong positive correlation between energy and loudness in music tracks. Higher energy in music typically results from greater intensity and activity within the track, which often translates to higher loudness levels. This is particularly prevalent in genres like rock, pop, and electronic, where dynamic and powerful sounds create a perception of high energy. The relationship hinges on the fact that our auditory perception equates louder sounds with higher energy, which is a key factor in music mastering where consistent loudness is crucial for the listener's experience across different tracks and platforms (LUFS 101, 2023).
+
+5.  **Instrumentalness vs ArtistPopularity:**
+
+-   **Negative Correlation:** The inverse relationship between instrumentalness and artist popularity can be partly explained by the commercial music landscape's favoring of vocal-centric tracks. Songs featuring vocals tend to appeal to wider audiences, enhancing an artist's popularity potential. Instrumental music, while valuable and popular within specific niches, often lacks the broad appeal of vocal music due to its more specialized or genre-specific nature. This trend reflects a general preference in the listening public, where easily relatable and lyrically driven songs tend to dominate mainstream channels and platforms, influencing artist popularity metrics (Loudness - Everything You Need To Know \| Production Expert, n.d.).
+
+::: {.callout-note appearance="simple" title="Click for Detailed Summary Statistics" collapse="true"}
+```{r, echo=FALSE}
+#| column: page
+# Summarize Your DataFrame
+summary_list <- lapply(df_clean, summary)
+
+# Filter for numeric columns only
+numeric_vars <- sapply(df_clean, is.numeric)
+
+# Convert Summary Output to a Data Frame for numeric columns
+numeric_summary_list <- lapply(names(df_clean)[numeric_vars], function(x) {
+  s <- summary(df_clean[[x]])
+  data.frame(
+    Variable = x,
+    Min = as.numeric(s[1]),
+    Q1 = as.numeric(s[2]),   # Renamed for simplicity
+    Median = as.numeric(s[3]),
+    Mean = as.numeric(s[4]),
+    Q3 = as.numeric(s[5]),   # Renamed for simplicity
+    Max = as.numeric(s[6])
+  )
+})
+
+numeric_summary_df <- do.call(rbind, numeric_summary_list)
+
+# Create a Nice Table Using gt
+summary_gt <- numeric_summary_df %>%
+  gt() %>%
+  tab_header(
+    title = "Summary of DataFrame") %>%
+  cols_label(
+    Variable = "Variable",
+    Min = "Minimum",
+    Q1 = "1st Quartile",
+    Median = "Median",
+    Mean = "Mean",
+    Q3 = "3rd Quartile",
+    Max = "Maximum"
+  ) %>%
+  fmt_number(
+    columns = vars(Min, Q1, Median, Mean, Q3, Max),
+    decimals = 2
+  )
+
+# Print the table
+summary_gt
+```
+:::
+
+## EDA Hypotheses
+
+Based on the observations derived from our exploratory data analysis, we propose the following hypotheses for further investigation in our report:
+
+1.  **Valence:** Higher **Valence** in a song increases the likelihood of it being liked, suggesting that songs projecting a positive mood are preferred.
+
+2.  **Speechiness and Explicit Content:** Lower levels of **Speechiness** and **Explicitness** content are associated with a higher likelihood of a song being liked, indicating a preference for non-explicit, melodic tracks.
+
+3.  **GenreCount:** A lower number of **Genres** per song predicts higher likability, implying that straightforward, less complex musical genres are preferred.
+
+4.  **Segment Duration:** Shorter segment durations within songs enhance likability, reflecting a preference for catchy and quickly engaging music.
+
+```{r saving clean dataset, echo=FALSE}
+df_clean_path <- here::here("data", "df_clean")
+write.csv(df_clean, df_clean_path, row.names = FALSE)
+```

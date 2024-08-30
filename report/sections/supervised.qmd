@@ -1,0 +1,1716 @@
+```{r, message=FALSE, echo=FALSE}
+source(here::here("src/setup.R"))
+df_clean <- here::here("data", "df_clean")
+df_clean <- read_csv(df_clean)
+```
+
+```{r, echo=FALSE}
+df_clean <- df_clean %>% select_if(is.numeric)
+#df_clean$Liked <- factor(df_clean$Liked)
+```
+
+# Modelling (Supervised)
+
+## Data splitting
+
+Before generating our predictive models, we organized our dataset into two main parts:
+
+1.  Training Set: This portion was used to train our models, enabling it to learn from our data. It comprised 80% of our entire dataset and included both the input features and the corresponding target values.
+2.  Test Set: This portion was utilized to evaluate the model's performance after the training and hyperparameter tuning phase. It was essential for assessing how well the model could generalize to new, unseen data and made up the remaining 20% of our dataset.
+
+Further, to refine our models and prevent overfitting and data leakage (Data Leakage and Its Effect on Machine Learning Models \| by Swetha \| Medium, n.d.), we subdivided our training set into two distinct subsets:
+
+1.  Training Subset: This subset, comprising 80% of our initial training set, was used for ongoing model training.
+2.  Validation Set: The remaining 20% of our initial training set served as the validation set. It was used to validate the baseline model's performance, as well as the best performing hyperparameter tuned models ensuring the model's effectiveness and preventing overfitting. This allowed us to directly compare the baseline and tuned models on the same validation set.
+
+The figure below shows a visual explanation of the breakdown of our datasets into training, test and validation sub-sets.
+
+![Our Data Splits Visualized](`r here::here("image", "Data Split Figure.png")`)
+
+
+In this process, we also employed stratified sampling for data splitting. This approach was chosen to ensure that the proportion of our target variables, Liked and Disliked, remained consistent with those of the full dataset (Igareta, 2021), which contained 400 observations equally divided between the two classes. Stratified sampling was crucial in maintaining balanced representation across our training and validation sets, thus mitigating the risk of bias and ensuring the robustness of our models.
+
+```{r simple split, echo=FALSE}
+set.seed(123)
+test_indices <- createDataPartition(df_clean$Liked, p = 0.2, list = FALSE)
+df_te <- df_clean[test_indices, ]
+df_tr <- df_clean[-test_indices, ]
+```
+
+```{r test/train/validation, echo=FALSE, results='hide'}
+# Further splitting the Training data into Training and Validation sets (80/20 split)
+validation_indices <- createDataPartition(df_tr$Liked, p = 0.20, list = FALSE)
+df_val <- df_tr[validation_indices, ]
+df_tr <- df_tr[-validation_indices, ]
+df_tr_full <- rbind(df_tr, df_val)
+
+# Display the sizes of the sets
+cat("Training Set Size:", nrow(df_tr), " - Proportion:", round(nrow(df_tr) / nrow(df_clean) * 100, 2), "%\n")
+cat("Validation Set Size:", nrow(df_val), " - Proportion:", round(nrow(df_val) / nrow(df_clean) * 100, 2), "%\n")
+cat("Test Set Size:", nrow(df_te), " - Proportion:", round(nrow(df_te) / nrow(df_clean) * 100, 2), "%\n")
+
+# Output sizes and distribution of 'Liked'
+cat("\nDistribution in Training Set:\n")
+print(table(df_tr$Liked))
+cat("Distribution in Validation Set:\n")
+print(table(df_val$Liked))
+cat("Distribution in Test Set:\n")
+print(table(df_te$Liked))
+```
+
+```{r, echo=FALSE}
+liked_dist <- data.frame(
+  Dataset = c("Training", "Validation", "Test"),
+  Liked = c(
+    sum(df_tr$Liked == "1") / nrow(df_tr),
+    sum(df_val$Liked == "1") / nrow(df_val),
+    sum(df_te$Liked == "1") / nrow(df_te)
+  ),
+  Disliked = c(
+    sum(df_tr$Liked == "0") / nrow(df_tr),
+    sum(df_val$Liked == "0") / nrow(df_val),
+    sum(df_te$Liked == "0") / nrow(df_te)
+  ),
+  Liked_Count = c(sum(df_tr$Liked == "1"), sum(df_val$Liked == "1"), sum(df_te$Liked == "1")),
+  Disliked_Count = c(sum(df_tr$Liked == "0"), sum(df_val$Liked == "0"), sum(df_te$Liked == "0"))
+)
+
+# Reshape data for plotting
+liked_dist_long <- liked_dist %>%
+  pivot_longer(
+    cols = c(Liked, Disliked),
+    names_to = "Sentiment",
+    values_to = "Proportion"
+  ) %>%
+  pivot_longer(
+    cols = c(Liked_Count, Disliked_Count),
+    names_to = "Count_Type",
+    values_to = "Count"
+  )
+
+# Filter to match the counts with their respective sentiments
+liked_dist_long <- liked_dist_long %>%
+  filter((Sentiment == "Liked" & Count_Type == "Liked_Count") |
+         (Sentiment == "Disliked" & Count_Type == "Disliked_Count"))
+
+# Plot
+ggplot(liked_dist_long, aes(x = Dataset, y = Proportion, fill = Sentiment)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = c("Liked" = "#1DB954", "Disliked" = "#B3B3B3")) +  # Custom colors
+  labs(title = "Distribution of Target Variable within Datasets",
+       subtitle = "Proportions and counts of Liked and Disliked Songs",
+       y = "Proportion",
+       fill = "Target Variables") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5),  # Center the title
+        plot.subtitle = element_text(hjust = 0.5)) + # Center the subtitle
+  geom_text(aes(label = Count), position = position_stack(vjust = 0.5), size = 3.5)  # Add count labels
+```
+
+```{r, echo=FALSE}
+df_tr$Liked <- factor(df_tr$Liked, levels = c("0", "1"), labels = c("Negative", "Positive"))
+df_val$Liked <- factor(df_val$Liked, levels = c("0", "1"), labels = c("Negative", "Positive"))
+df_te$Liked <- factor(df_te$Liked, levels = c("0", "1"), labels = c("Negative", "Positive"))
+df_tr_full$Liked <- factor(df_tr_full$Liked, levels = c("0", "1"), labels = c("Negative", "Positive"))
+```
+
+## Baseline Modelling
+
+To determine the most effective model for predicting whether a song would be Liked or Disliked, we began by modelling baseline models. We utilized a variety of models, such as Logistic Regression, SVM, Classification Trees and Random Forests, to assess their initial baseline performance based on specific scores/metrics. Then, the model that demonstrated the best performance from this initial group was selected for further refinement through hyperparameter tuning.\
+All baseline models were run using the 'Caret' package and implemented a 5-fold cross validation (except for the Naïve model given that it doesn't actually use a statistical model but just predicts the most probable category in the data). We chose a 5-fold cross-validation approach for our dataset with 400 observations to ensure that each fold contained a sufficient number of observations for robust model training and validation. A larger number of folds would have resulted in smaller training and validation sets, which might not have adequately representeded the data's variability and could have lead to overfitting or underfitting issues. By using 5 folds, we balanced the need for a reliable model evaluation with the practical consideration of maintaining reasonably sized training and test sets (Does It Matter?, n.d.) (Data Science - K-Fold Cross-Validation How Many Folds? - Stack Overflow, n.d.) (3.1. Cross-Validation: Evaluating Estimator Performance --- Scikit-Learn 1.4.2 Documentation, n.d.). The diagram below visualizes how Cross Validation works by splitting the training set into 5 parts (5-fold), selecting four parts to train the model and using the fifth and final part as a validation set.
+
+![Cross Validation Visualized - Inspired by (Agrawal, 2020)](`r here::here("image", "Cross Validation.png")`)
+
+### Naive Model
+
+The first model we implemented was a Naïve Model, which predicted the most probable category based on our data (essentially taking a guess). Since our data splits were stratified, this model effectively made predictions with a 50/50 probability (open callout to see confusion matrix and scores). Serving as a completely random baseline, this Naïve Model helped us set a foundational benchmark for evaluating other models. Essentially, if the accuracy (and/or other relevant scores) of subsequent models did not surpass that of the Naïve Model, those models would be considered ineffective and not worth further implementation.
+
+```{r naive model, echo=FALSE, results='hide', message=FALSE}
+# Calculate the frequency of each category in the training set and identify the most frequent
+category_counts <- table(df_tr$Liked)
+most_frequent_category <- names(which.max(category_counts))
+
+# Output to verify
+print(paste("Most frequent category in training data:", most_frequent_category))
+print(category_counts)
+
+# Predict using the most frequent category for the validation set
+naive_predictions_val <- factor(rep(most_frequent_category, nrow(df_val)), levels = levels(df_val$Liked))
+
+# Create and print the confusion matrix for predictions on the validation set
+confusion_matrix_naive <- confusionMatrix(naive_predictions_val, df_val$Liked)
+
+# Print the confusion matrix to see various metrics for the validation set
+print(confusion_matrix_naive)
+```
+
+::: {.callout-note title="Learn More About Our Naive Model Results on our Training Set" collapse="true" appearance="simple"}
+```{r naive output nice}
+category_counts <- table(df_tr$Liked)
+most_frequent_category <- names(which.max(category_counts))
+
+# Predict using the most frequent category for the validation set
+naive_predictions_val <- factor(rep(most_frequent_category, nrow(df_val)), levels = levels(df_val$Liked))
+
+# Create and print the confusion matrix for predictions on the validation set
+confusion_matrix_naive <- confusionMatrix(naive_predictions_val, df_val$Liked)
+
+metrics <- data.frame(
+  Metric = c("Accuracy", "95% CI", "No Information Rate", "P-Value [Acc > NIR]", "Kappa", 
+             "Mcnemar's Test P-Value", "Sensitivity", "Specificity", "Pos Pred Value", 
+             "Neg Pred Value", "Prevalence", "Detection Rate", "Detection Prevalence", 
+             "Balanced Accuracy", "'Positive' Class"),
+  Value = c(
+    confusion_matrix_naive$overall["Accuracy"],
+    paste0("(", round(confusion_matrix_naive$overall["AccuracyLower"], 3), ", ", round(confusion_matrix_naive$overall["AccuracyUpper"], 3), ")"),
+    confusion_matrix_naive$overall["AccuracyNull"],
+    round(confusion_matrix_naive$overall["AccuracyPValue"], 2),
+    confusion_matrix_naive$overall["Kappa"],
+    format.pval(confusion_matrix_naive$overall["McnemarPValue"]),
+    confusion_matrix_naive$byClass["Sensitivity"],
+    confusion_matrix_naive$byClass["Specificity"],
+    confusion_matrix_naive$byClass["Pos Pred Value"],
+    ifelse(is.nan(confusion_matrix_naive$byClass["Neg Pred Value"]), "NaN", confusion_matrix_naive$byClass["Neg Pred Value"]),
+    confusion_matrix_naive$byClass["Prevalence"],
+    confusion_matrix_naive$byClass["Detection Rate"],
+    confusion_matrix_naive$byClass["Detection Prevalence"],
+    confusion_matrix_naive$byClass["Balanced Accuracy"],
+    confusion_matrix_naive$positive
+  )
+)
+
+# Create and print the gt table
+gt_table <- gt(metrics)
+gt_table
+# Visualize the confusion matrix using fourfoldplot
+cf <- confusion_matrix_naive$table
+fourfoldplot(as.table(cf), color = c("#3C6E71", "#FE4A49"), main = "Confusion Matrix")
+
+```
+
+How we calculated the Naive Model:
+
+1.  **Determine the Most Frequent Category**:
+
+    -   Calculate the frequency of each category in the training set.
+    -   Identify the category with the highest frequency.
+
+    Let: $$
+    \text{Category\ Counts} = \{C_1: n_1, C_2: n_2, \ldots, C_k: n_k\}
+    $$ where ( C_i ) represents the (i)-th category and ( n_i ) is the number of occurrences of ( C_i ) in the training set.
+
+    The most frequent category ( C\_{\text{max}} ) is: $$
+    C_{\text{max}} = \arg\max_{C_i} (n_i)
+    $$
+
+2.  **Predict the Most Frequent Category for the Validation Set**:
+
+    -   For each observation in the validation set, assign the most frequent category ( C\_{\text{max}} ).
+
+    Let ( N\_{\text{val}} ) be the number of observations in the validation set.
+
+    The predictions ( \hat{Y}\_{\text{naive}} ) for the validation set are: $$
+    \hat{Y}_{\text{naive}} = \{C_{\text{max}}, C_{\text{max}}, \ldots, C_{\text{max}}\} \quad \text{(repeated \(N_{\text{val}}\) times)}
+    $$
+
+This simple approach provides a benchmark to assess the performance of more complex models. By comparing other models to this naive baseline, we can better understand their predictive power and improvements.
+:::
+
+------------------------------------------------------------------------
+
+### Logistic Regression
+
+The second model we coded was a Logistic Regression (LR) model. Given the binary classification exercise (predicting a 0 or 1) this is the one of the most commonly used model for these cases (Choosing a Model for Binary Classification Problem \| by Andrii Gozhulovskyi \| Medium, n.d.). LR models are statistical models that model the probability of a binary outcome based on features of the dataset. It then uses a logistic function to transform the linear combination of these features into a probability (i.e., this ensures that it's between 0 and 1)). If the probably is higher than a given threshold such as in our case where it's 0.5 it predicts a positive outcome and vis versa. For a detailed explanation on how LR models work you can check out Natassha Selvaraj's wonderful "[Logistic Regression Explained in 7 Minutes](https://medium.com/towards-data-science/logistic-regression-explained-in-7-minutes-f648bf44d53e)" article on Medium/Towards Data Science.
+
+**Baseline Model Setup:**
+
+-   Package Used: caret
+
+-   Function: train()
+
+-   Model Type: Generalized Linear Model (GLM) with a logistic link (binomial family)
+
+-   Cross-Validation: 5-fold cross-validation
+
+-   Predictive Performance Evaluation: Standard classification metrics (accuracy, sensitivity, specificity)
+
+-   Probability Prediction: Enabled (class probabilities)
+
+```{r glm cv, results='hide'}
+set.seed(123)  # for reproducibility
+trControlglm <- trainControl(
+  method = "cv",
+  number = 5,
+  savePredictions = "none",
+  summaryFunction = defaultSummary,
+  classProbs = TRUE  # Ensure class probabilities can be predicted
+)
+
+glm_1 <- train(Liked ~., data = df_tr, method = "glm", family="binomial",
+               trControl=trControlglm, trace=0)
+print(glm_1)
+```
+
+::: {.callout-note appearance="simple" title="Learn More About Our Logistic Results on our Training Set" collapse="true"}
+As can be seen the accuracy of this model was approximately 76.56%, which is a good improvement compared to the naive model. In addition, the confidence interval for the accuracy indicates that the true accuracy of the model, given the data, is expected to be between 64.3% and 86.2%. The kappa statistic is also moderate, 0.53125, indicating a fair agreement beyond chance between the predicted and actual classifications. The model correctly identifies 81.25% of actual positives, demonstrating good sensitivity and correctly rejects 71.875% of actual negatives, indicating reasonable specificity.
+
+```{r glm cv cm and statistics, echo=FALSE}
+# Predict probabilities for the validation set
+prob_val <- predict(glm_1, newdata=df_val, type="prob")
+
+# Assuming the class probabilities for the positive class ("Positive") are under the "Positive" column
+pred_val_liked <- ifelse(prob_val[, "Positive"] >= 0.5, "Positive", "Negative")
+
+# Convert predictions and actuals to factor ensuring same levels
+pred_val_liked <- factor(pred_val_liked, levels=c("Negative", "Positive"))
+actuals_val_liked <- factor(df_val$Liked, levels=c("Negative", "Positive"))
+
+confusion_matrix_glm <- confusionMatrix(pred_val_liked, actuals_val_liked, positive="Positive")
+
+# Print the confusion matrix to see various metrics for the validation set
+#print(confusion_matrix_glm)
+metrics <- data.frame(
+  Metric = c("Accuracy", "95% CI", "No Information Rate", "P-Value [Acc > NIR]", "Kappa", 
+             "Mcnemar's Test P-Value", "Sensitivity", "Specificity", "Pos Pred Value", 
+             "Neg Pred Value", "Prevalence", "Detection Rate", "Detection Prevalence", 
+             "Balanced Accuracy", "'Positive' Class"),
+  Value = c(
+    confusion_matrix_glm$overall["Accuracy"],
+    paste0("(", round(confusion_matrix_glm$overall["AccuracyLower"], 3), ", ", round(confusion_matrix_glm$overall["AccuracyUpper"], 3), ")"),
+    confusion_matrix_glm$overall["AccuracyNull"],
+    round(confusion_matrix_glm$overall["AccuracyPValue"], 2),
+    confusion_matrix_glm$overall["Kappa"],
+    format.pval(confusion_matrix_glm$overall["McnemarPValue"]),
+    confusion_matrix_glm$byClass["Sensitivity"],
+    confusion_matrix_glm$byClass["Specificity"],
+    confusion_matrix_glm$byClass["Pos Pred Value"],
+    ifelse(is.nan(confusion_matrix_glm$byClass["Neg Pred Value"]), "NaN", confusion_matrix_glm$byClass["Neg Pred Value"]),
+    confusion_matrix_glm$byClass["Prevalence"],
+    confusion_matrix_glm$byClass["Detection Rate"],
+    confusion_matrix_glm$byClass["Detection Prevalence"],
+    confusion_matrix_glm$byClass["Balanced Accuracy"],
+    confusion_matrix_glm$positive
+  )
+)
+
+# Create and print the gt table
+gt_table <- gt(metrics)
+gt_table
+
+# Visualize the confusion matrix using fourfoldplot
+cf <- confusion_matrix_glm$table
+fourfoldplot(as.table(cf), color = c("#3C6E71", "#FE4A49"), main = "Confusion Matrix")
+```
+:::
+
+------------------------------------------------------------------------
+
+### Classification Trees
+
+The third model we used was a Classification Tree, which helped visualize how different features influenced the prediction of a song being "Liked" or "Disliked". Classification trees are non-parametric supervised learning method used for both classification and regression tasks. They work by splitting the data into subsets, creating a tree-like model of the decisions leading to a final classification. These models can be great as they are easily interpretable, understandable and can be visualized (white-box-model). However they need to be used with caution as they can easily create overly complicated trees (overfitting on training data) that don't generalize well to unseen data (e.g., a test set) (1.10. Decision Trees, n.d.). To learn more about Classification Trees you can check out [Normalized Nerd's video](https://www.youtube.com/watch?v=ZVR2Way4nwQ&ab_channel=NormalizedNerd) which clearly explains in detail how it works.
+
+**Baseline Model Setup:**
+
+-   Package Used: caret for model training and rpart for the algorithm
+
+-   Function: train() from caret and rpart.plot() for visualization
+
+-   Model Type: Recursive Partitioning and Regression Trees (rpart)
+
+-   Cross-Validation: 5-fold cross-validation to assess model performance
+
+-   Parameter Tuning: Complexity parameter (cp) set to 0 to prevent automatic tuning and provide a baseline for comparison
+
+*(N.B: Given that rpart automatically tunes the hyperparameters of the model when using cross validation, we set the cp = 0 in order to get a baseline model that could be compared to the other models.)*
+
+```{r tree}
+set.seed(123)
+trControl <- trainControl(method = "cv", number = 5, savePredictions = "none" )
+tuneGrid <- expand.grid(cp = 0) # To ensure that rpart doesn't automatically tune during basic model comparasion stage we are making
+tree_1 <- train(Liked ~ ., data = df_tr, method = "rpart", trControl = trControl, tuneGrid = tuneGrid)
+rpart.plot(tree_1$finalModel)
+```
+
+```{r tree cm and statistics, echo=FALSE, results='hide', message=FALSE}
+# Building the decision tree model
+set.seed(123)
+tree_1 <- rpart(Liked ~ ., data=df_tr, method="class")
+
+# Predicting class labels on the validation data
+predictions_tree <- predict(tree_1, newdata=df_val, type="class")
+
+# Ensuring predictions and actual labels are factors with the same levels
+predictions_tree <- factor(predictions_tree, levels = c("Negative", "Positive"))
+actuals_val_liked <- factor(df_val$Liked, levels = c("Negative", "Positive"))
+
+# Creating a confusion matrix
+confusion_matrix_tree <- confusionMatrix(predictions_tree, actuals_val_liked, positive = "Positive")
+
+# Printing the confusion matrix and various metrics
+#print(confusion_matrix_tree)
+```
+
+::: {.callout-note appearance="simple" title="Learn More About Our Classification Tree Results on our Training Set" collapse="true"}
+As for the result, the following features "Explicitness", "Valence", "Duration", "GenreCount", "AgeInDays", "Speechiness", "ArtistFollowers", "AlbumPopularity" were used as decision nodes in the tree. Each node split (e.g., Valence \< 0.38) suggested that the feature significantly impacted the classification decision. Leaf Nodes represented the probability of a song being classified as positive or negative based on the combination of features leading to that node. For instance, if a song's "ArtistFollowers" were greater than 8.9 million and its "AlbumPopularity" was less than 33, it had an 44% probability of being liked.
+
+However, looking at the table below, we can see that only about 64.06% of all predictions made by the model were correct, with a Confidence Interval suggesting that the true accuracy of the model could vary between 51.1% and 75.7%. In addition, the Kappa value of 0.28125 indicated modest predictive strength. This assessment was supported by the confusion matrix, which highlighted opportunities for improvement in both specificity and sensitivity, suggesting that the model could be more effective in reducing both types of prediction errors.
+
+```{r,echo=FALSE}
+# Extract metrics from confusion matrix
+metrics <- data.frame(
+  Metric = c("Accuracy", "95% CI", "No Information Rate", "P-Value [Acc > NIR]", "Kappa", 
+             "Mcnemar's Test P-Value", "Sensitivity", "Specificity", "Pos Pred Value", 
+             "Neg Pred Value", "Prevalence", "Detection Rate", "Detection Prevalence", 
+             "Balanced Accuracy", "'Positive' Class"),
+  Value = c(
+    confusion_matrix_tree$overall["Accuracy"],
+    paste0("(", round(confusion_matrix_tree$overall["AccuracyLower"], 3), ", ", round(confusion_matrix_tree$overall["AccuracyUpper"], 3), ")"),
+    confusion_matrix_tree$overall["AccuracyNull"],
+    round(confusion_matrix_tree$overall["AccuracyPValue"], 2),
+    confusion_matrix_tree$overall["Kappa"],
+    format.pval(confusion_matrix_tree$overall["McnemarPValue"]),
+    confusion_matrix_tree$byClass["Sensitivity"],
+    confusion_matrix_tree$byClass["Specificity"],
+    confusion_matrix_tree$byClass["Pos Pred Value"],
+    ifelse(is.nan(confusion_matrix_tree$byClass["Neg Pred Value"]), "NaN", confusion_matrix_tree$byClass["Neg Pred Value"]),
+    confusion_matrix_tree$byClass["Prevalence"],
+    confusion_matrix_tree$byClass["Detection Rate"],
+    confusion_matrix_tree$byClass["Detection Prevalence"],
+    confusion_matrix_tree$byClass["Balanced Accuracy"],
+    confusion_matrix_tree$positive
+  )
+)
+
+# Create and print the gt table
+gt_table <- gt(metrics)
+gt_table
+
+# Visualize the confusion matrix using fourfoldplot
+cf <- confusion_matrix_tree$table
+fourfoldplot(as.table(cf), color = c("#3C6E71", "#FE4A49"), main = "Confusion Matrix Tree")
+```
+:::
+
+------------------------------------------------------------------------
+
+### Support Vector Machine
+
+We next set out to perform both Linear and Radial support vector machines -- however both methods ended up giving relatively similar results. Keeping Occam's Razor in mind, we preferred to take the simplest route to ensure that we didn't overcomplex the model (Occam's Razor in Machine Learning: Examples - Analytics Yogi, n.d.) (Hsu et al., n.d.).  A linear Support Vector Machine (SVM) is a supervised learning algorithm used for binary classification that finds the optimal hyperplane separating two classes by maximizing the margin between them. The data points closest to the hyperplane, called support vectors, determine the position and orientation of the hyperplane. This approach is effective for linearly separable data and ensures a robust classification with the largest possible margin. To learn more about this method you can check out Lujing Chen's extremely well written article "[Support Vector Machine -- Simply Explained](https://towardsdatascience.com/support-vector-machine-simply-explained-fee28eba5496#:~:text=To%20sum%20up%2C%20SVM%20in,so%2Dcalled%20margin%2C%20is%20maximized)" on Medium.
+
+**Baseline Model Setup:**
+
+-   Package Used: caret for model training.
+
+-   Function: train() from caret.
+
+-   Model Type: Support Vector Machine (SVM), specifically linear SVM for simplicity and effectiveness in binary classification tasks (RPubs - SVM with CARET, n.d.).
+
+-   Cross-Validation: 5-fold cross-validation.
+
+-   Feature Scaling: Applied as a pre-processing step (preProcess = "scale"). This is critical because SVM relies on maximizing the margin between classes, which is sensitive to the scale of the features.
+
+```{r trControlSVM}
+# Define basic training control for SVM
+trControlSVM <- trainControl(
+  method = "cv",
+  number = 5,             # Number of folds
+  savePredictions = "none",
+  classProbs = TRUE,        # Save class probabilities for ROC analysis
+  summaryFunction = twoClassSummary  # Ensure binary class summaries
+)
+svm_linear_cv <- train(
+  Liked ~ .,
+  data = df_tr,
+  method = "svmLinear",
+  trControl = trControlSVM,
+  preProcess = "scale",     # Scale features
+  metric = "ROC"            # Optimize for ROC when comparing models
+)
+```
+
+```{r SVM radial CV, eval=FALSE, echo=FALSE, results='hide'}
+svm_radial_cv <- train(
+  Liked ~ .,
+  data = df_tr,
+  method = "svmRadial",
+  trControl = trControlSVM,
+  preProcess = "scale",     # Scale features
+  metric = "ROC"            # Optimize for ROC when comparing models
+)
+```
+
+::: {.callout-note appearance="simple" title="Learn More About Our SVM Results on our Training Set" collapse="true"}
+This model demonstrated a relatively strong performance, with approximately 75% of its predictions being accurate. The Kappa statistic of 0.5 further supported this assessment, indicating decent predictive strength. A notable aspect of this model was its superior ability to correctly predict negative cases, as evidenced by a specificity of 84.38%. However, its sensitivity, which measures the accuracy of predicting positive cases, was lower at only 65.63%. This disparity suggested that there is room for improvement in the model's ability to identify positive cases more effectively.
+
+```{r SVM cm and statistics CV, echo=FALSE}
+# Predict probabilities on the validation set for both models
+prob_svm_linear <- predict(svm_linear_cv, newdata = df_val, type = "prob")[,"Positive"]
+#prob_svm_radial <- predict(svm_radial_cv, newdata = df_val, type = "prob")[,"Positive"]
+
+svm_linear_cv_pred <- predict(svm_linear_cv, newdata = df_val)
+#svm_radial_cv_pred <- predict(svm_radial_cv, newdata = df_val)
+
+# Create a confusion matrix
+confusion_matrix_svm_linear <- confusionMatrix(data = svm_linear_cv_pred, reference = df_val$Liked)
+#print(confusion_matrix_svm_linear)
+
+# Create a confusion matrix
+#confusion_matrix_svm_radial <- confusionMatrix(data = svm_radial_cv_pred, reference = df_val$Liked)
+#print(confusion_matrix_svm_radial)
+
+# Extract metrics from confusion matrix
+metrics <- data.frame(
+  Metric = c("Accuracy", "95% CI", "No Information Rate", "P-Value [Acc > NIR]", "Kappa", 
+             "Mcnemar's Test P-Value", "Sensitivity", "Specificity", "Pos Pred Value", 
+             "Neg Pred Value", "Prevalence", "Detection Rate", "Detection Prevalence", 
+             "Balanced Accuracy", "'Positive' Class"),
+  Value = c(
+    confusion_matrix_svm_linear$overall["Accuracy"],
+    paste0("(", round(confusion_matrix_svm_linear$overall["AccuracyLower"], 3), ", ", round(confusion_matrix_svm_linear$overall["AccuracyUpper"], 3), ")"),
+    confusion_matrix_svm_linear$overall["AccuracyNull"],
+    round(confusion_matrix_svm_linear$overall["AccuracyPValue"], 2),
+    confusion_matrix_svm_linear$overall["Kappa"],
+    format.pval(confusion_matrix_svm_linear$overall["McnemarPValue"]),
+    confusion_matrix_svm_linear$byClass["Sensitivity"],
+    confusion_matrix_svm_linear$byClass["Specificity"],
+    confusion_matrix_svm_linear$byClass["Pos Pred Value"],
+    ifelse(is.nan(confusion_matrix_svm_linear$byClass["Neg Pred Value"]), "NaN", confusion_matrix_svm_linear$byClass["Neg Pred Value"]),
+    confusion_matrix_svm_linear$byClass["Prevalence"],
+    confusion_matrix_svm_linear$byClass["Detection Rate"],
+    confusion_matrix_svm_linear$byClass["Detection Prevalence"],
+    confusion_matrix_svm_linear$byClass["Balanced Accuracy"],
+    confusion_matrix_svm_linear$positive
+  )
+)
+# Create and print the gt table
+gt_table <- gt(metrics)
+gt_table
+# Visualize the confusion matrix using fourfoldplot
+cf <- confusion_matrix_svm_linear$table
+fourfoldplot(as.table(cf), color = c("#3C6E71", "#FE4A49"), main = "Confusion Matrix")
+```
+:::
+
+------------------------------------------------------------------------
+
+### Random Forest (Ensemble Method)
+
+A Random Forest model is an ensemble learning method. "An ensemble learner is made of several learners -- so called base learners or sub-learners that are combined for the prediction" (MLBA - S24 - Ensemble Methods, n.d.). In other words it operates by constructing multiple decision trees (see Classification Section for more on trees) then averaging to produce a final single prediction. This technique is especially powerful as it combines the simplicity of a classification tree with the ability to correct for their tendency to overfit to the training set. This model is also highly performing for binary classification tasks as it can handle a large number of features in our dataset and the complex interactions between them. However this complexity introduced through the Ensemble method (combining multiple trees together) comes with the cost of turning this model into a black-box-model, meaning that it is no longer interpretable easily through visualizations for example. The figure below shows the difference between our previous Classification Tree and a Random Forest (in this case the RF only have 3 trees, however in our baseline model we already are using 100 trees -- this is just for demonstration purposes). To learn more, please check out "Machine Learning-Decision Trees and Random Forest Classifiers" article by Karan Kashyap on Medium.
+
+![Classification vs Random Forest](`r here::here("image", "Random Forest Explained.png")`)
+
+
+**Baseline Model Setup:**
+
+-   Package Used: caret for model training.
+
+-   Function: train() from caret.
+
+-   Model Type: Random Forest (RF), an ensemble learning method that constructs multiple decision trees and aggregates their predictions to enhance model accuracy and control overfitting.
+
+-   Cross-Validation: 5-fold cross-validation to validate the model's effectiveness.
+
+-   Number of Trees: Initially set to 100 to balance between computational efficiency and predictive accuracy.
+
+```{r trControl RF, echo=FALSE}
+trControlBasicRF <- trainControl(
+  method = "cv",           # Using standard k-fold cross-validation
+  number = 5,             # Number of folds in the cross-validation
+  savePredictions = "none",
+  classProbs = TRUE,       # Save class probabilities for potential ROC analysis later
+  summaryFunction = defaultSummary  # Use default summary statistics (Accuracy, Kappa, etc.)
+)
+set.seed(123)
+rf_model_cv <- train(
+  Liked~., 
+  data = df_tr, 
+  method = "rf", 
+  trControl = trControlBasicRF,
+  ntree = 100,       # number of trees
+  importance = TRUE   # calculate variable importance
+)
+```
+
+::: {.callout-note appearance="simple" title="Learn More About Our Random Forest Results on our Training Set" collapse="true"}
+This model accurately predicted approximately 70.31% of all cases. A Kappa value of 0.40625 indicated a moderate agreement beyond chance between the predicted and actual classifications, reflecting fair predictive strength. While the model demonstrated a moderate ability to detect positive cases with a sensitivity of 62.5%, it excelled in identifying negative cases with a specificity of 78.13%, showcasing its robustness in correctly rejecting negative instances.
+
+```{r rf cm and statistics, echo=FALSE}
+# Use the trained model to make predictions on the test set
+predictions_rf_cv <- predict(rf_model_cv, newdata = df_val)
+probabilities_rf_cv <- predict(rf_model_cv, newdata = df_val, type = "prob")
+prob_rf <- predict(rf_model_cv, newdata = df_val, type = "prob")[, "Positive"]
+
+# Create a confusion matrix
+confusion_matrix_rf <- confusionMatrix(predictions_rf_cv, df_val$Liked)
+#print(confusion_matrix_rf)
+
+# Extract metrics from confusion matrix
+metrics <- data.frame(
+  Metric = c("Accuracy", "95% CI", "No Information Rate", "P-Value [Acc > NIR]", "Kappa", 
+             "Mcnemar's Test P-Value", "Sensitivity", "Specificity", "Pos Pred Value", 
+             "Neg Pred Value", "Prevalence", "Detection Rate", "Detection Prevalence", 
+             "Balanced Accuracy", "'Positive' Class"),
+  Value = c(
+    confusion_matrix_rf$overall["Accuracy"],
+    paste0("(", round(confusion_matrix_rf$overall["AccuracyLower"], 3), ", ", round(confusion_matrix_rf$overall["AccuracyUpper"], 3), ")"),
+    confusion_matrix_rf$overall["AccuracyNull"],
+    round(confusion_matrix_rf$overall["AccuracyPValue"], 2),
+    confusion_matrix_rf$overall["Kappa"],
+    format.pval(confusion_matrix_rf$overall["McnemarPValue"]),
+    confusion_matrix_rf$byClass["Sensitivity"],
+    confusion_matrix_rf$byClass["Specificity"],
+    confusion_matrix_rf$byClass["Pos Pred Value"],
+    ifelse(is.nan(confusion_matrix_rf$byClass["Neg Pred Value"]), "NaN", confusion_matrix_rf$byClass["Neg Pred Value"]),
+    confusion_matrix_rf$byClass["Prevalence"],
+    confusion_matrix_rf$byClass["Detection Rate"],
+    confusion_matrix_rf$byClass["Detection Prevalence"],
+    confusion_matrix_rf$byClass["Balanced Accuracy"],
+    confusion_matrix_rf$positive
+  )
+)
+
+# Create and print the gt table
+gt_table <- gt(metrics)
+gt_table
+
+# Visualize the confusion matrix using fourfoldplot
+cf <- confusion_matrix_rf$table
+fourfoldplot(as.table(cf), color = c("#3C6E71", "#FE4A49"), main = "Confusion Matrix")
+```
+:::
+
+### Comparison/Results of Baseline Models
+
+When determining the baseline performance of our models, it was important to define what constitutes a "successful" or "high performing" model. To accurately assess our models' effectiveness, we chose specific metrics for evaluation. Given the balanced nature of our datasets, achieved through stratified splitting, and the equal importance we placed on both Positive and Negative predictions, we settled on the following scores to guide our evaluation of the models' performance.
+
+| **Score/Metric**     | **Description**                                                                                                                                                                         |
+|-----------------|-------------------------------------------------------|
+| Balanced Accuracy    | Given the balanced nature of our dataset, this score indicates the overall proportion of correct predictions (i.e., in this case given the stratification Balanced Accuracy = Accuracy) |
+| ROC AUC              | Measures the model's ability to distinguish between classes across all threshold levels, combining both the sensitivity and specificity.                                                |
+| Kappa                | Measures the agreement between predicted and actual classifications beyond chance, providing a key insight into the model's predictive strength.                                        |
+| Precision            | Precision measures the proportion of positive predictions that are actually correct.                                                                                                    |
+| Recall (Sensitivity) | Recall measures the proportion of actual positives correctly identified by the model.                                                                                                   |
+
+The following table provides these key metrics for all of our models. For a comprehensive table including **all** scores for all our models (e.g., F1_Score, PosPredValue, etc) please refer to the Appendix.
+
+```{r model comparasion table, message=FALSE, eval=FALSE, echo=FALSE, results='hide'}
+# Function to extract metrics
+get_metrics <- function(cm) {
+  data.frame(
+    Accuracy = cm$overall['Accuracy'],
+    Kappa = cm$overall['Kappa'],
+    Sensitivity = cm$byClass['Sensitivity'],
+    Specificity = cm$byClass['Specificity'],
+    Precision = cm$byClass['Precision'],
+    Recall = cm$byClass['Sensitivity'],  # Recall is the same as Sensitivity
+    F1_Score = 2 * (cm$byClass['Precision'] * cm$byClass['Sensitivity']) / (cm$byClass['Precision'] + cm$byClass['Sensitivity']),
+    stringsAsFactors = FALSE
+  )
+}
+
+# Create a list of confusion matrices
+cm_list <- list(
+  Naive = confusion_matrix_naive,
+  Logistic_Regression = confusion_matrix_glm,
+  Decision_Tree = confusion_matrix_tree,
+  SVM_Linear = confusion_matrix_svm_linear,
+  #SVM_Radial = confusion_matrix_svm_radial,
+  Random_Forest = confusion_matrix_rf
+)
+
+# Map over list to create a data frame of metrics for each model
+metrics_df <- bind_rows(lapply(cm_list, get_metrics), .id = "Model")
+
+# Pivoting the table to get models as columns and metrics as rows
+long_metrics_df <- metrics_df %>%
+  pivot_longer(cols = -Model, names_to = "Metric", values_to = "Value") %>%
+  pivot_wider(names_from = Model, values_from = Value)
+
+# Create a gt table for the pivoted data
+metrics_table <- gt(long_metrics_df) %>%
+  tab_header(title = "Baseline Model Performance Comparison", subtitle = "Performance evaluated on Validation Set") %>%
+  cols_label(
+    Metric = "Metric",
+    Naive = "Naive",
+    Logistic_Regression = "Logistic Regression",
+    Decision_Tree = "Decision Tree",
+    SVM_Linear = "SVM Linear",
+  #  SVM_Radial = "SVM Radial",
+    Random_Forest = "Random Forest"
+  ) %>%
+  fmt_number(
+    columns = TRUE,
+    decimals = 3
+  )
+
+# Print the gt table
+print(metrics_table)
+```
+
+```{r, echo=FALSE, message=FALSE}
+# Function to extract metrics
+get_metrics <- function(cm) {
+  data.frame(
+    Accuracy = cm$overall['Accuracy'],
+    AccuracyLower = cm$overall['AccuracyLower'],
+    AccuracyUpper = cm$overall['AccuracyUpper'],
+    Kappa = cm$overall['Kappa'],
+    McnemarPValue = cm$overall['McnemarPValue'],
+    Sensitivity = cm$byClass['Sensitivity'],
+    Specificity = cm$byClass['Specificity'],
+    PosPredValue = cm$byClass['Pos Pred Value'],
+    NegPredValue = cm$byClass['Neg Pred Value'],
+    Precision = cm$byClass['Precision'],
+    Recall = cm$byClass['Sensitivity'],
+    F1_Score = 2 * (cm$byClass['Precision'] * cm$byClass['Sensitivity']) / (cm$byClass['Precision'] + cm$byClass['Sensitivity']),
+    Prevalence = cm$byClass['Prevalence'],
+    DetectionRate = cm$byClass['Detection Rate'],
+    DetectionPrevalence = cm$byClass['Detection Prevalence'],
+    BalancedAccuracy = cm$byClass['Balanced Accuracy'],
+    stringsAsFactors = FALSE
+  )
+}
+
+# Create a list of confusion matrices
+cm_list <- list(
+  Naive = confusion_matrix_naive,
+  Logistic_Regression = confusion_matrix_glm,
+  Decision_Tree = confusion_matrix_tree,
+  SVM_Linear = confusion_matrix_svm_linear,
+  Random_Forest = confusion_matrix_rf
+)
+
+# Map over list to create a data frame of metrics for each model
+metrics_df <- bind_rows(lapply(cm_list, get_metrics), .id = "Model")
+
+# Pivoting the table to get models as columns and metrics as rows
+long_metrics_df <- metrics_df %>%
+  pivot_longer(cols = -Model, names_to = "Metric", values_to = "Value") %>%
+  pivot_wider(names_from = Model, values_from = Value)
+
+# Create a gt table for the pivoted data
+metrics_table_baseline <- gt(long_metrics_df) %>%
+  tab_header(title = "Baseline Model Performance Comparison", subtitle = "Performance evaluated on Validation Set") %>%
+  cols_label(
+    Metric = "Metric",
+    Naive = "Naive",
+    Logistic_Regression = "Logistic Regression",
+    Decision_Tree = "Decision Tree",
+    SVM_Linear = "SVM Linear",
+    Random_Forest = "Random Forest"
+  ) %>%
+  fmt_number(
+    columns = TRUE,
+    decimals = 3
+  )
+```
+
+```{r baseline table reduced, echo=FALSE, message=FALSE}
+get_metrics <- function(cm) {
+  data.frame(
+    BalancedAccuracy = cm$byClass['Balanced Accuracy'],
+   # ROCAUC = cm$byClass['ROC'],
+    Kappa = cm$overall['Kappa'],
+    Precision = cm$byClass['Precision'],
+    Recall = cm$byClass['Sensitivity'],
+    stringsAsFactors = FALSE
+  )
+}
+
+# Create a list of confusion matrices
+cm_list <- list(
+  Naive = confusion_matrix_naive,
+  Logistic_Regression = confusion_matrix_glm,
+  Decision_Tree = confusion_matrix_tree,
+  SVM_Linear = confusion_matrix_svm_linear,
+  Random_Forest = confusion_matrix_rf
+)
+
+# Map over list to create a data frame of metrics for each model
+metrics_df <- bind_rows(lapply(cm_list, get_metrics), .id = "Model")
+
+# Pivoting the table to get models as columns and metrics as rows
+long_metrics_df <- metrics_df %>%
+  pivot_longer(cols = -Model, names_to = "Metric", values_to = "Value") %>%
+  pivot_wider(names_from = Model, values_from = Value)
+
+# Create a gt table for the pivoted data
+metrics_table <- gt(long_metrics_df) %>%
+  tab_header(title = "Baseline Model Performance Comparison", subtitle = "Performance evaluated on Validation Set") %>%
+  cols_label(
+    Metric = "Metric",
+    Naive = "Naive",
+    Logistic_Regression = "Logistic Regression",
+    Decision_Tree = "Decision Tree",
+    SVM_Linear = "SVM Linear",
+    Random_Forest = "Random Forest"
+  ) %>%
+  fmt_number(
+    columns = TRUE,
+    decimals = 3
+  )
+
+# Print the gt table
+metrics_table
+```
+
+```{r ROC curves simple models, echo=FALSE, message=FALSE}
+# Ensure probabilities for the positive class are calculated and available
+# For the naive model, we simulate probabilities as the proportion of the most frequent class in the training set
+prob_naive <- rep(max(category_counts) / sum(category_counts), length(df_val$Liked))
+
+# Logistic Regression probabilities
+prob_logistic <- predict(glm_1, newdata=df_val, type="prob")[, "Positive"]
+
+# Classification Tree probabilities (need to convert factors to probabilities)
+prob_tree <- as.numeric(predictions_tree == "Positive")
+
+# Assuming you have probabilities for SVM (please ensure by your method or model setting)
+prob_svm_linear <- predict(svm_linear_cv, newdata=df_val, type = "prob")[, "Positive"]
+#prob_svm_radial <- predict(svm_radial_cv, newdata=df_val, type = "prob")[, "Positive"]
+
+# Random Forest probabilities
+prob_rf <- predict(rf_model_cv, newdata = df_val, type = "prob")[, "Positive"]
+
+# Creating ROC objects for each model
+roc_naive <- roc(response = df_val$Liked, predictor = prob_naive, levels = c("Negative", "Positive"))
+roc_logistic <- roc(response = df_val$Liked, predictor = prob_logistic, levels = c("Negative", "Positive"))
+roc_tree <- roc(response = df_val$Liked, predictor = prob_tree, levels = c("Negative", "Positive"))
+roc_svm_linear <- roc(response = df_val$Liked, predictor = prob_svm_linear, levels = c("Negative", "Positive"))
+#roc_svm_radial <- roc(response = df_val$Liked, predictor = prob_svm_radial, levels = c("Negative", "Positive"))
+roc_rf <- roc(response = df_val$Liked, predictor = prob_rf, levels = c("Negative", "Positive"))
+
+# Ensure that the plot uses the traditional orientation
+plot(roc_logistic, main = "Baseline ROC Curves Comparison", col = "#1DB954", xlab = "1 - Specificity (False Positive Rate)", ylab = "Sensitivity (True Positive Rate)", print.auc = TRUE, print.auc.x = 0.6, print.auc.y = 0.40)
+plot(roc_naive, add = TRUE, col = "#3C6E71", print.auc = TRUE, print.auc.x = 0.6, print.auc.y = 0.35)
+plot(roc_tree, add = TRUE, col = "#FE4A49", print.auc = TRUE, print.auc.x = 0.6, print.auc.y = 0.3)
+plot(roc_svm_linear, add = TRUE, col = "#B3B3B3", print.auc = TRUE, print.auc.x = 0.6, print.auc.y = 0.25)
+plot(roc_rf, add = TRUE, col = "#1A1414", print.auc = TRUE, print.auc.x = 0.6, print.auc.y = 0.20)
+
+# Add a legend to the plot
+legend("bottomright", legend = c("Logistic Regression", "Naive", "Classification Tree", "SVM Linear",  "Random Forest"), col = c("#1DB954", "#3C6E71", "#FE4A49", "#B3B3B3", "#1A1414"), lwd = 2)
+
+
+# Calculate AUC values
+auc_naive <- auc(roc_naive)
+auc_logistic <- auc(roc_logistic)
+auc_tree <- auc(roc_tree)
+auc_svm_linear <- auc(roc_svm_linear)
+#auc_svm_radial <- auc(roc_svm_radial)
+auc_rf <- auc(roc_rf)
+
+# Create a data frame of AUC values
+auc_data <- data.frame(
+  Model = c("Naive", "Logistic Regression", "Classification Tree", "SVM Linear","Random Forest"),
+  AUC = c(auc_naive, auc_logistic, auc_tree, auc_svm_linear, auc_rf)
+)
+
+# Generate the gt table
+gt_table <- gt(auc_data) %>%
+  tab_header(
+    title = "Baseline AUC Values"
+  ) %>%
+  cols_label(
+    Model = "Model",
+    AUC = "Area Under the Curve (AUC)"
+  ) %>%
+  fmt_number(
+    columns = vars(AUC),
+    decimals = 3
+  )
+
+
+#gt_table
+
+```
+
+```{r, echo=FALSE, message=FALSE, eval=FALSE}
+
+# Calculate AUC values
+auc_naive <- auc(roc_naive)
+auc_logistic <- auc(roc_logistic)
+auc_tree <- auc(roc_tree)
+auc_svm_linear <- auc(roc_svm_linear)
+#auc_svm_radial <- auc(roc_svm_radial)
+auc_rf <- auc(roc_rf)
+
+# Create a data frame of AUC values
+auc_data <- data.frame(
+  Model = c("Naive", "Logistic Regression", "Classification Tree", "SVM Linear","Random Forest"),
+  AUC = c(auc_naive, auc_logistic, auc_tree, auc_svm_linear, auc_rf)
+)
+
+# Generate the gt table
+gt_table <- gt(auc_data) %>%
+  tab_header(
+    title = "Baseline AUC Values"
+  ) %>%
+  cols_label(
+    Model = "Model",
+    AUC = "Area Under the Curve (AUC)"
+  ) %>%
+  fmt_number(
+    columns = vars(AUC),
+    decimals = 3
+  )
+
+
+gt_table
+```
+
+::: column-margin
+**Understanding Kappa**
+
+Cohen's Kappa measures the agreement between a classification model's predictions and the actual outcomes, adjusting for chance agreement.
+
+| Kappa Value | Interpretation         |
+|-------------|------------------------|
+| 0           | No Agreement           |
+| 0.10-0.20   | Slight Agreement       |
+| 0.21-0.40   | Fair Agreeement        |
+| 0.41-0.60   | Moderate Agreement     |
+| 0.61        | Substantial Agreement  |
+| 0.81-0.9    | Near Perfect Agreement |
+| 1.00        | Perfect Agreement      |
+
+: Kappa Table Summary (Bobbitt, 2021)
+:::
+
+**Naïve:**
+
+-   Model demonstrated the worst performance as it was just predicting the most probable category. Its Balanced Accuracy and ROC AUC were at 0.5, and its Kappa was at 0, meaning it had no agreement. Since it was predicting only one case, its Recall was perfect (1.000), but its precision was low (0.500), meaning that half of the positive predictions were incorrect, understandably.
+
+**Classification Tree:**
+
+-   Model had the worst performance among all baseline models (except Naïve), with balanced accuracy and ROC AUC at 0.641. The Kappa value (0.281) suggested fair agreement. It showed decent recall (0.719) but lower precision (0.622), indicating that while it identified positive cases reasonably well, its positive predictions were less reliable.
+
+**SVM:**
+
+-   Model performed well, with balanced accuracy (0.750) and ROC AUC (0.781). The Kappa value (0.500) indicated moderate agreement. It balanced high precision (0.808) with moderate recall (0.656), making it effective in identifying both positive and negative instances, though slightly favoring precision.
+
+**Logistic Regression**:
+
+-   The Logistic Regression demonstrated the best overall performance amongst the models. It achieved the highest balanced accuracy of 76.6%, indicating it correctly identifies both liked and disliked songs with a high degree of accuracy. Its ROC AUC of 0.791 showed it had a strong ability to distinguish between the two classes, performing well across different threshold levels. The Kappa statistic of 0.531 suggested moderate agreement between predicted and actual classifications beyond chance, highlighting its predictive strength. The baseline model also excelled in recall (0.812), meaning it was highly effective in identifying songs that would be liked. Precision (0.743) was also strong, indicating that when the model predicted a "Liked" song, it was often correct. This balance between high recall and good precision-made Logistic Regression a robust choice for predicting song preferences, ensuring both high identification of positive cases and reliability of positive predictions.
+
+**Random Forest:**
+
+-   Random Forest also performed exceptionally well, particularly in terms of ROC AUC, with the highest score of 0.835. This indicated that the model had an excellent ability to distinguish between liked and disliked songs across all thresholds. Its balanced accuracy was 70.3%, suggesting it effectively handled both classes. The Kappa value for Random Forest was 0.406, showing moderate agreement beyond chance. The model had high precision (0.741), meaning its positive predictions (liked songs) were highly reliable. However, its recall (0.625) was lower than Logistic Regression, indicating it missed more positive cases. Despite this, the high precision and overall discriminative power of Random Forest made it a valuable model for this classification task.
+
+Given the following scores from our baseline models on our Validation set we chose to continue our exercise by selecting the Logistic Regression and the Random Forest. We believed that both models exhibited strong, balanced performance, making them ideal candidates for further optimization. Logistic Regression was particularly strong in identifying positive cases (liked songs) with high recall and good precision. Random Forest excelled in discriminative power and precision, ensuring that its positive predictions were highly reliable. These models' balanced performance and strong predictive capabilities justify their selection for further hyperparameter tuning.
+
+The full results of all the baseline models can be found in the Appendix.
+
+## Hyperparameter Tuning
+
+After choosing the Logistic Regression and Random Forest, we moved onto tuning the hyperparameters of the models in an attempt to increase their predictive capabilities even further. In other words, hyperparameter tuning consists of attempting to identify a set of optimal parameters for a machine learning algorithm to increase its performance and render it more robust (Hyperparameter Tuning Overview \| BigQuery, n.d.) (What Is Hyperparameter Tuning?, n.d.). Different models offer different hyperparameters that can be tuned.
+
+### Logistic Regression Tuning
+
+For the Logistic Regression model, we applied Elastic Net regularization, which combined both Lasso (L1) and Ridge (L2) regularization techniques. Lasso and Ridge were two types of regularization techniques that helped to prevent overfitting by adding a penalty to the loss function during the model's training. Lasso regression uses a L1 penalty to promote sparsity among the coefficients, potentially reducing some to zero, whereas Ridge regression employs a L2 penalty which shrinks the coefficients towards zero but does not set them to zero. Our method, Elastic net combined the properties of both. If you'd like to learn more about the Elastic Net check this article by Rohit Bhadauriya "[Lasso ,Ridge & Elastic Net Regression: A Complete Understanding (2021)](https://medium.com/@creatrohit9/lasso-ridge-elastic-net-regression-a-complete-understanding-2021-b335d9e8ca3)"
+
+We defined a grid for the two key hyperparameters: **'alpha'** and **'lambda'**. The **'alpha'** controlled the mix between the Lasso and Ridge regularization, which we explored in increments of 0.2. We attempted to explore this in smaller increments such as 0.001, however we noticed the same results with increased computation times. The '**lambda'** parameter controlled the strength of this regularization, which we tested on a logarithmic scale from 10\^-4 to 10\^0. As with the other models we used 5-fold-cross validation to ensure robustness.
+
+The optimal tuning parameters for the Logistic Regression were:
+
+-   **Alpha = 0**
+
+-   **Lambda = 0.1**
+
+```{r, echo=TRUE, results='hide'}
+set.seed(123)
+# Define Train Control
+trControlglmtuning <- trainControl(
+  method = "cv",
+  number = 5,
+  savePredictions = "none",
+  classProbs = TRUE,
+  summaryFunction = twoClassSummary
+)
+
+# Define Grid for Elastic Net (Lasso and Ridge)
+tuneGrid <- expand.grid(
+  alpha = seq(0, 1, by = 0.2),  # Lasso (1) to Ridge (0)
+  lambda = 10^seq(-4, 0, by = 1)
+)
+
+# Train Model with Elastic Net
+set.seed(123)
+glmnet_model <- train(
+  Liked ~ .,
+  data = df_tr,
+  method = "glmnet",
+  trControl = trControlglmtuning,
+  tuneGrid = tuneGrid,
+  metric = "ROC"
+)
+
+print("Best Parameters for Random Forest:")
+print(glmnet_model$bestTune)
+
+# Predict probabilities for the validation set
+prob_val <- predict(glmnet_model, newdata=df_val, type="prob")
+
+# Assuming the class probabilities for the positive class ("Positive") are under the "Positive" column
+pred_val_liked <- ifelse(prob_val[, "Positive"] >= 0.5, "Positive", "Negative")
+
+# Convert predictions and actuals to factor ensuring same levels
+pred_val_liked <- factor(pred_val_liked, levels=c("Negative", "Positive"))
+actuals_val_liked <- factor(df_val$Liked, levels=c("Negative", "Positive"))
+
+confusion_matrix_glm_tuned <- confusionMatrix(pred_val_liked, actuals_val_liked, positive="Positive")
+
+# Print the confusion matrix to see various metrics for the validation set
+print(confusion_matrix_glm_tuned)
+```
+
+### Random Forest Tuning
+
+For the Random Forest model, we focused on three primary hyperparameters: '**mtry'**,'**ntree'**, and '**nodesize'**. The'**mtry'** parameter, representing the number of features considered at each split, was tuned using a grid search with values of 2, 4, 6, 8, and 10. To find the optimum number of trees ('**ntree'**) and the minimum size for the terminal nodes ('**nodesize'**), we conducted a nested loop search with '**ntree'** values of 100,200,300 and'**nodesize'** values of 1,5,10. As with the Logistic Regression tuning we also attempted other parameters without significant changes and increased computation times. As with all other models within this study we ran a 5-fold cross-validation.
+
+The optimal tuning parameters for the Random Forest were:
+
+-   **mtry = 2**
+
+-   **ntree = 100**
+
+-   **nodesize = 5**
+
+```{r, echo=TRUE, results='hide'}
+set.seed(123)
+trControlRFTuning <- trainControl(
+  method = "cv",           # Using standard k-fold cross-validation
+  number = 5,             # Number of folds in the cross-validation
+  savePredictions = "none",
+  classProbs = TRUE,       # Save class probabilities for potential ROC analysis later
+  summaryFunction = twoClassSummary  # Use summary statistics (ROC, Sensitivity, etc.)
+)
+
+# Grid Search for Tuning Random Forest (Only for `mtry`)
+tuneGridRF <- expand.grid(
+  mtry = c(2, 4, 6, 8, 10)  # Number of variables to try at each split
+)
+
+# Initialize Best Model and Metrics
+best_model <- NULL
+best_conf_matrix <- NULL
+best_accuracy <- 0
+best_params <- list(mtry = NA, ntree = NA, nodesize = NA)
+
+# Nested Loop for ntree and nodesize
+ntree_values <- c(100, 200, 300)
+nodesize_values <- c(1, 5, 10)
+
+for (ntree in ntree_values) {
+  for (nodesize in nodesize_values) {
+    set.seed(123)
+    rf_model <- train(
+      Liked ~ .,
+      data = df_tr,
+      method = "rf",
+      trControl = trControlRFTuning,
+      tuneGrid = tuneGridRF,
+      ntree = ntree,               # Number of trees
+      nodesize = nodesize,         # Minimum size of terminal nodes
+      importance = TRUE            # Calculate variable importance
+    )
+
+    # Evaluate Performance on Validation Tuning Set (df_val)
+    predictions_rf <- predict(rf_model, newdata = df_val)
+    confusion_matrix_rf_tune <- confusionMatrix(predictions_rf, df_val$Liked, positive = "Positive")
+    accuracy_rf <- confusion_matrix_rf_tune$overall["Accuracy"]
+
+    # Check if it's the best model
+    if (accuracy_rf > best_accuracy) {
+      best_accuracy <- accuracy_rf
+      best_model <- rf_model
+      confusion_matrix_rf_tuned <- confusion_matrix_rf_tune
+      best_params$mtry <- rf_model$bestTune$mtry
+      best_params$ntree <- ntree
+      best_params$nodesize <- nodesize
+    }
+  }
+}
+
+# Display Best Parameters and Confusion Matrix
+print("Best Model Parameters for Random Forest:")
+print(best_params)
+print(confusion_matrix_rf_tuned)
+```
+
+### Comparing Baseline vs Tuned Models
+
+In the following Table and ROC curve below we can see the performance of the baseline Logistic Regression and Random Forest compared to the newly hyperparameter tuned models.
+
+```{r, echo=FALSE, echo=FALSE, message=FALSE}
+get_metrics <- function(cm) {
+  data.frame(
+    BalancedAccuracy = cm$byClass['Balanced Accuracy'],
+   # ROCAUC = cm$byClass['ROC'],
+    Kappa = cm$overall['Kappa'],
+    Precision = cm$byClass['Precision'],
+    Recall = cm$byClass['Sensitivity'],
+    stringsAsFactors = FALSE
+  )
+}
+
+# Create a list of confusion matrices
+cm_list <- list(
+  Baseline_Logistic_Regression = confusion_matrix_glm,
+  Logistic_Regression = confusion_matrix_glm_tuned,
+  Baseline_Random_Forest = confusion_matrix_rf, 
+  Random_Forest = confusion_matrix_rf_tuned
+)
+
+# Map over list to create a data frame of metrics for each model
+metrics_df <- bind_rows(lapply(cm_list, get_metrics), .id = "Model")
+
+# Pivoting the table to get models as columns and metrics as rows
+long_metrics_df <- metrics_df %>%
+  pivot_longer(cols = -Model, names_to = "Metric", values_to = "Value") %>%
+  pivot_wider(names_from = Model, values_from = Value)
+
+# Create a gt table for the pivoted data
+metrics_table <- gt(long_metrics_df) %>%
+  tab_header(title = "Baseline vs Tuned Model Performance Comparison", subtitle = "Performance evaluated on Validation Set") %>%
+  cols_label(
+    Metric = "Metric",
+    Baseline_Logistic_Regression = "Baseline Logistic Regression",
+    Baseline_Random_Forest = "Baseline Random Forest",
+    Logistic_Regression = "Logistic Regression",
+    Random_Forest = "Random Forest"
+  ) %>%
+  fmt_number(
+    columns = TRUE,
+    decimals = 3
+  )
+
+# Print the gt table
+metrics_table
+```
+
+```{r baseline vs tuned appendix, echo=FALSE, warning=FALSE, message=FALSE, results='hide'}
+get_metrics <- function(cm) {
+  data.frame(
+    Accuracy = cm$overall['Accuracy'],
+    AccuracyLower = cm$overall['AccuracyLower'],
+    AccuracyUpper = cm$overall['AccuracyUpper'],
+    Kappa = cm$overall['Kappa'],
+    McnemarPValue = cm$overall['McnemarPValue'],
+    Sensitivity = cm$byClass['Sensitivity'],
+    Specificity = cm$byClass['Specificity'],
+    PosPredValue = cm$byClass['Pos Pred Value'],
+    NegPredValue = cm$byClass['Neg Pred Value'],
+    Precision = cm$byClass['Precision'],
+    Recall = cm$byClass['Sensitivity'],
+    F1_Score = 2 * (cm$byClass['Precision'] * cm$byClass['Sensitivity']) / (cm$byClass['Precision'] + cm$byClass['Sensitivity']),
+    Prevalence = cm$byClass['Prevalence'],
+    DetectionRate = cm$byClass['Detection Rate'],
+    DetectionPrevalence = cm$byClass['Detection Prevalence'],
+    BalancedAccuracy = cm$byClass['Balanced Accuracy'],
+    stringsAsFactors = FALSE
+  )
+}
+
+# Create a list of confusion matrices
+cm_list <- list(
+  Baseline_Logistic_Regression = confusion_matrix_glm,
+  Logistic_Regression = confusion_matrix_glm_tuned,
+  Baseline_Random_Forest = confusion_matrix_rf, 
+  Random_Forest = confusion_matrix_rf_tuned
+)
+
+# Map over list to create a data frame of metrics for each model
+metrics_df <- bind_rows(lapply(cm_list, get_metrics), .id = "Model")
+
+# Pivoting the table to get models as columns and metrics as rows
+long_metrics_df <- metrics_df %>%
+  pivot_longer(cols = -Model, names_to = "Metric", values_to = "Value") %>%
+  pivot_wider(names_from = Model, values_from = Value)
+
+# Create a gt table for the pivoted data
+metrics_table_baseline_tuned <- gt(long_metrics_df) %>%
+  tab_header(title = "Baseline vs Tuned Model Performance Comparison", subtitle = "Performance evaluated on Validation Set") %>%
+  cols_label(
+    Metric = "Metric",
+    Baseline_Logistic_Regression = "Baseline Logistic Regression",
+    Baseline_Random_Forest = "Baseline Random Forest",
+    Logistic_Regression = "Logistic Regression",
+    Random_Forest = "Random Forest"
+  ) %>%
+  fmt_number(
+    columns = TRUE,
+    decimals = 3
+  )
+```
+
+```{r, echo=FALSE, message=FALSE, results='hide'}
+#| layout-nrow: 1
+prob_logistic_baseline <- predict(glm_1, newdata = df_val, type = "prob")[, "Positive"]
+prob_rf_baseline <- predict(rf_model_cv, newdata = df_val, type = "prob")[, "Positive"]
+prob_logistic_tuned <- predict(glmnet_model, newdata = df_val, type = "prob")[, "Positive"]
+prob_rf_tuned <- predict(best_model, newdata = df_val, type = "prob")[, "Positive"]
+
+# Create ROC objects for each model
+roc_logistic_baseline <- roc(response = df_val$Liked, predictor = prob_logistic_baseline, levels = c("Negative", "Positive"))
+roc_rf_baseline <- roc(response = df_val$Liked, predictor = prob_rf_baseline, levels = c("Negative", "Positive"))
+roc_logistic_tuned <- roc(response = df_val$Liked, predictor = prob_logistic_tuned, levels = c("Negative", "Positive"))
+roc_rf_tuned <- roc(response = df_val$Liked, predictor = prob_rf_tuned, levels = c("Negative", "Positive"))
+
+# Plot ROC curves for Logistic Regression (Baseline vs Tuned)
+plot(roc_logistic_baseline, main = "Logistic Regression ROC Curves", col = "blue", 
+     xlab = "1 - Specificity (False Positive Rate)", ylab = "Sensitivity (True Positive Rate)", 
+     print.auc = TRUE, print.auc.x = 0.6, print.auc.y = 0.4)
+plot(roc_logistic_tuned, add = TRUE, col = "red", print.auc = TRUE, print.auc.x = 0.6, print.auc.y = 0.35)
+
+# Add a legend to the Logistic Regression plot
+legend("bottomright", legend = c("LR Baseline", "LR Tuned"), col = c("blue", "red"), lwd = 2)
+
+# Plot ROC curves for Random Forest (Baseline vs Tuned)
+plot(roc_rf_baseline, main = "Random Forest ROC Curves", col = "green", 
+     xlab = "1 - Specificity (False Positive Rate)", ylab = "Sensitivity (True Positive Rate)", 
+     print.auc = TRUE, print.auc.x = 0.6, print.auc.y = 0.4)
+plot(roc_rf_tuned, add = TRUE, col = "brown", print.auc = TRUE, print.auc.x = 0.6, print.auc.y = 0.35)
+
+# Add a legend to the Random Forest plot
+legend("bottomright", legend = c("RF Baseline", "RF Tuned"), col = c("green", "brown"), lwd = 2)
+```
+
+```{r, echo=FALSE, results='hide'}
+auc_naive <- auc(roc_naive)
+auc_logistic_baseline <- auc(roc_logistic_baseline)
+auc_logistic_tuned <- auc(roc_logistic_tuned)
+auc_rf_baseline <- auc(roc_rf)
+auc_rf_tuned <- auc(roc_rf_tuned)
+
+
+# Create a data frame of AUC values
+auc_data <- data.frame(
+  Model = c("Naive", "LR Baseline", "LR Tuned", "RF Baseline","RF Tuned"),
+  AUC = c(auc_naive, auc_logistic_baseline, auc_logistic_tuned, auc_rf_baseline, auc_rf_tuned)
+)
+
+# Generate the gt table
+gt_table <- gt(auc_data) %>%
+  tab_header(
+    title = "Tuned AUC Values"
+  ) %>%
+  cols_label(
+    Model = "Model",
+    AUC = "Area Under the Curve (AUC)"
+  ) %>%
+  fmt_number(
+    columns = vars(AUC),
+    decimals = 3
+  )
+
+# Print the gt table
+
+gt_table
+```
+
+```{r Tuned Model Parameters, echo=FALSE}
+set.seed(123)
+best_alpha <- glmnet_model$bestTune$alpha
+best_lambda <- glmnet_model$bestTune$lambda
+
+# Create Tune Grid for Elastic Net Model
+tuneGridGLMNet <- expand.grid(
+  alpha = best_alpha,
+  lambda = best_lambda
+)
+
+set.seed(123)
+tuneGridRF_final <- expand.grid(
+  mtry = best_params$mtry
+)
+```
+
+```{r Retraining on Whole Set, echo=FALSE, results='hide'}
+# Retrain Elastic Net Model on the Full Training Data
+set.seed(123)
+
+trControlglmfinal <- trainControl(
+ # method = "cv",
+  #number = 5,
+  savePredictions = "none",
+  classProbs = TRUE,
+  summaryFunction = twoClassSummary
+)
+
+glmnet_model_final <- train(
+  Liked ~ .,
+  data = df_tr_full,
+  method = "glmnet",
+  trControl = trControlglmfinal,
+  tuneGrid = tuneGridGLMNet,
+)
+
+trControlRFfinal <- trainControl(
+ # method = "cv",           # Using standard k-fold cross-validation
+ # number = 5,             # Number of folds in the cross-validation
+  savePredictions = "none",
+  classProbs = TRUE,       # Save class probabilities for potential ROC analysis later
+  summaryFunction = twoClassSummary  # Use summary statistics (ROC, Sensitivity, etc.)
+)
+
+# Retrain Random Forest Model on the Full Training Data
+set.seed(123)
+
+rf_model_final <- train(
+  Liked ~ .,
+  data = df_tr_full,
+  method = "rf",
+  #trControl = trControlRFfinal,
+  tuneGrid = tuneGridRF_final,
+  ntree = best_params$ntree,         
+  nodesize = best_params$nodesize,   
+ # importance = TRUE                  
+)
+```
+
+Both the Logistic Regression and Random Forest models showed improvements in performance on the Validation Set. The Logistic Regression model, for instance, saw an increase in Balanced Accuracy from 0.766 to 0.781 and a rise in Kappa from 0.531 to 0.562, indicating better agreement beyond chance. Precision also improved slightly from 0.743 to 0.750, while Recall increased from 0.812 to 0.844, showing enhanced ability to correctly identify positive cases. The ROC AUC metric for Logistic Regression increased from 0.791 to 0.818, reflecting a better overall discrimination between classes.
+
+Similarly, the Random Forest model demonstrated improvements, with Balanced Accuracy increasing from 0.703 to 0.766 and Kappa rising from 0.406 to 0.531. Although there was a slight decrease in Precision from 0.741 to 0.730, the Recall significantly improved from 0.625 to 0.844, indicating a much better performance in identifying positive cases. The ROC AUC for the Random Forest model also saw a modest increase from 0.835 to 0.839. These improvements suggested that the hyperparameter tuning process successfully enhanced the models' ability to generalize and make accurate predictions, providing a more robust performance on the validation set.
+
+------------------------------------------------------------------------
+
+## Interpretation of the model(s)
+
+Once we obtained the optimal tuning parameters, we then retrained our models using these hyperparameters on the **Complete Training Set** by combining back the **Validation** sets and **Training** sets together. We then proceeded to test the models on the final Test set and received the following results which can be seen in the table and ROC AUC curves below.
+
+### Model Results on Test Set
+
+```{r Test Set, echo=FALSE, results='hide', cache=TRUE}
+# Evaluate Elastic Net Model on Test Set
+prob_test_glmnet <- predict(glmnet_model_final, newdata = df_te, type = "prob")
+pred_test_glmnet <- ifelse(prob_test_glmnet[, "Positive"] >= 0.5, "Positive", "Negative")
+pred_test_glmnet <- factor(pred_test_glmnet, levels = c("Negative", "Positive"))
+actuals_test_glmnet <- factor(df_te$Liked, levels = c("Negative", "Positive"))
+
+confusion_matrix_glmnet_te <- confusionMatrix(pred_test_glmnet, actuals_test_glmnet, positive = "Positive")
+print("Confusion Matrix for Elastic Net on Test Set:")
+print(confusion_matrix_glmnet_te)
+
+# Evaluate Random Forest Model on Test Set
+pred_test_rf <- predict(rf_model_final, newdata = df_te)
+confusion_matrix_rf_te <- confusionMatrix(pred_test_rf, df_te$Liked, positive = "Positive")
+print("Confusion Matrix for Random Forest on Test Set:")
+print(confusion_matrix_rf_te)
+```
+
+```{r, echo=FALSE, results='hide', cache=TRUE}
+# Calculate the frequency of each category in the training set and identify the most frequent
+category_counts <- table(df_tr$Liked)
+most_frequent_category <- names(which.max(category_counts))
+
+# Output to verify
+print(paste("Most frequent category in test data:", most_frequent_category))
+print(category_counts)
+
+# Predict using the most frequent category for the validation set
+naive_predictions_val <- factor(rep(most_frequent_category, nrow(df_te)), levels = levels(df_te$Liked))
+
+# Create and print the confusion matrix for predictions on the validation set
+confusion_matrix_naive_te <- confusionMatrix(naive_predictions_val, df_te$Liked)
+
+# Print the confusion matrix to see various metrics for the validation set
+print(confusion_matrix_naive_te)
+```
+
+```{r, echo=FALSE, cache=TRUE}
+get_metrics <- function(cm) {
+  data.frame(
+    BalancedAccuracy = cm$byClass['Balanced Accuracy'],
+   # ROCAUC = cm$byClass['ROC'],
+    Kappa = cm$overall['Kappa'],
+    Precision = cm$byClass['Precision'],
+    Recall = cm$byClass['Sensitivity'],
+    stringsAsFactors = FALSE
+  )
+}
+
+# Create a list of confusion matrices
+cm_list <- list(
+  #Naive_Model_Test = confusion_matrix_naive_te,
+  Logistic_Regression_Validation = confusion_matrix_glm_tuned,
+  Logistic_Regression_Test = confusion_matrix_glmnet_te,
+  Random_Forest_Validation = confusion_matrix_rf_tuned, 
+  Random_Forest_Test = confusion_matrix_rf_te
+)
+
+# Map over list to create a data frame of metrics for each model
+metrics_df <- bind_rows(lapply(cm_list, get_metrics), .id = "Model")
+
+# Pivoting the table to get models as columns and metrics as rows
+long_metrics_df <- metrics_df %>%
+  pivot_longer(cols = -Model, names_to = "Metric", values_to = "Value") %>%
+  pivot_wider(names_from = Model, values_from = Value)
+
+# Create a gt table for the pivoted data
+metrics_table <- gt(long_metrics_df) %>%
+  tab_header(title = "Train vs. Test Model Performance Comparison", subtitle = "Performance comparasion between Validation and Test Sets") %>%
+  cols_label(
+    Metric = "Metric",
+   # Naive_Model_Test = "Naive Model Test",
+    Logistic_Regression_Validation = "Logistic Regression Validation",
+    Random_Forest_Validation = "Random Forest Validation",
+    Logistic_Regression_Test = "Logistic Regression Test",
+    Random_Forest_Test = "Random Forest Test"
+  ) %>%
+  fmt_number(
+    columns = TRUE,
+    decimals = 3
+  )
+
+# Print the gt table
+metrics_table
+```
+
+```{r test appendix, echo=FALSE, cache=TRUE}
+get_metrics <- function(cm) {
+  data.frame(
+    Accuracy = cm$overall['Accuracy'],
+    AccuracyLower = cm$overall['AccuracyLower'],
+    AccuracyUpper = cm$overall['AccuracyUpper'],
+    Kappa = cm$overall['Kappa'],
+    McnemarPValue = cm$overall['McnemarPValue'],
+    Sensitivity = cm$byClass['Sensitivity'],
+    Specificity = cm$byClass['Specificity'],
+    PosPredValue = cm$byClass['Pos Pred Value'],
+    NegPredValue = cm$byClass['Neg Pred Value'],
+    Precision = cm$byClass['Precision'],
+    Recall = cm$byClass['Sensitivity'],
+    F1_Score = 2 * (cm$byClass['Precision'] * cm$byClass['Sensitivity']) / (cm$byClass['Precision'] + cm$byClass['Sensitivity']),
+    Prevalence = cm$byClass['Prevalence'],
+    DetectionRate = cm$byClass['Detection Rate'],
+    DetectionPrevalence = cm$byClass['Detection Prevalence'],
+    BalancedAccuracy = cm$byClass['Balanced Accuracy'],
+    stringsAsFactors = FALSE
+  )
+}
+
+# Create a list of confusion matrices
+cm_list <- list(
+  Naive_Model_Test = confusion_matrix_naive_te,
+  Logistic_Regression_Validation = confusion_matrix_glm_tuned,
+  Logistic_Regression_Test = confusion_matrix_glmnet_te,
+  Random_Forest_Validation = confusion_matrix_rf_tuned, 
+  Random_Forest_Test = confusion_matrix_rf_te
+)
+
+# Map over list to create a data frame of metrics for each model
+metrics_df <- bind_rows(lapply(cm_list, get_metrics), .id = "Model")
+
+# Pivoting the table to get models as columns and metrics as rows
+long_metrics_df <- metrics_df %>%
+  pivot_longer(cols = -Model, names_to = "Metric", values_to = "Value") %>%
+  pivot_wider(names_from = Model, values_from = Value)
+
+# Create a gt table for the pivoted data
+metrics_table_test <- gt(long_metrics_df) %>%
+  tab_header(title = "Train vs. Test Model Performance Comparison", subtitle = "Performance comparasion between Validation and Test Sets") %>%
+  cols_label(
+    Metric = "Metric",
+    Naive_Model_Test = "Naive Model Test",
+    Logistic_Regression_Validation = "Logistic Regression Training",
+    Random_Forest_Validation = "Random Forest Training",
+    Logistic_Regression_Test = "Logistic Regression Test",
+    Random_Forest_Test = "Random Forest Test"
+  ) %>%
+  fmt_number(
+    columns = TRUE,
+    decimals = 3
+  )
+```
+
+The Balanced Accuracy for Logistic Regression on the test set was 0.787, slightly higher than its validation performance of 0.781. Similarly, the Random Forest model showed a small improvement in Balanced Accuracy on the test set, rising to 0.812 from 0.766 on the validation set. It is noteworthy that the test set results were slightly better than the validation set results, which is unusual. However, we believe this is because the models were retrained on the combined training and validation datasets, increasing the number of observations by 25%. This augmentation of the training data likely enhanced the predictive capacity of the models, allowing them to perform better on the test set.
+
+The Kappa statistic also showed a slight increase for both models on the test set. Logistic Regression's Kappa improved from 0.562 to 0.575, and Random Forest's Kappa increased from 0.531 to 0.625. These improvements suggest that the models had a stronger predictive strength when evaluated on the test set.
+
+Precision and Recall metrics further supported the robustness of our models. Logistic Regression's Precision increased from 0.750 to 0.767, indicating that a higher proportion of positive predictions were correct on the test set. Its Recall, however, slightly decreased from 0.844 to 0.825, indicating a minor drop in identifying all actual positives. For the Random Forest model, both Precision and Recall improved on the test set, with Precision increasing from 0.730 to 0.778 and Recall rising from 0.844 to 0.875. This showed that the Random Forest model was better at identifying both positive instances and the correctness of those predictions on the test set.
+
+### ML Interpretation
+
+#### Variable Importance Plots
+
+```{r, echo=FALSE, warning=FALSE, results='hide'}
+df_te$Liked_numeric <- as.numeric(df_te$Liked == "Positive")
+x_train <- select(df_te, -Liked, -Liked_numeric)
+y_train <- pull(df_te, Liked_numeric)
+
+
+explainer_lr <- DALEX::explain(model = glmnet_model_final, 
+                               data = x_train, 
+                               y = y_train,
+                               label = "Logistic Regression")
+
+explainer_rf <- DALEX::explain(model = rf_model_final,
+                               data = x_train,
+                               y = y_train,
+                               label = "Random Forest")
+```
+
+```{r, echo=FALSE, cache=TRUE}
+#| layout-nrow: 1
+#| column: page
+calculate_importance <- function(your_model_explainer, n_permutations = 10) {
+  imp <- model_parts(explainer = your_model_explainer,
+                     B = n_permutations,
+                     type = "ratio",
+                     N = NULL)
+  return(imp)
+}
+
+importance_lr  <- calculate_importance(explainer_lr)
+importance_rf  <- calculate_importance(explainer_rf)
+
+
+plot(importance_lr) +
+  ggtitle("Mean variable-importance ratio over 10 permutations", "")
+
+plot(importance_rf) +
+  ggtitle("Mean variable-importance ratio over 10 permutations", "")
+```
+
+```{r, eval=FALSE}
+calculate_importance_table <- function(your_model_explainer, n_permutations = 10) {
+  imp <- model_parts(explainer = your_model_explainer,
+                     B = n_permutations,
+                     type = "ratio",
+                     N = NULL) %>%
+    as.data.frame()  # Ensure output is a dataframe
+  return(imp)
+}
+
+importance_lr_table  <- calculate_importance_table(explainer_lr)
+importance_rf_table  <- calculate_importance_table(explainer_rf)
+
+# Display tables using kable for a neat format
+kable(importance_lr_table, caption = "Variable Importance from Logistic Regression") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+kable(importance_rf_table, caption = "Variable Importance from Random Forest") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+This section aims to assess the significance of variables in our final models, tested on the Test Set, using the 'DALEX' package. We constructed explainer objects for both the Logistic Regression and the Random Forest tuned models. This setup enabled us to measure how the absence of each predictor affected the model's predictive accuracy, specifically using the decrease in AUC as our metric of evaluation.
+
+**Logistic Regression Model:**
+
+-   **Dominant Variables:** The logistic regression analysis highlighted 'Valence', 'Explicit', 'GenreCount', and 'WordCount' as the most significant predictors. This aligned with the exploratory analysis, confirming the strong influence of these features on a song being Liked.
+
+-   **Valence**: The consistent prominence of 'Valence' across different permutations underscored its importance in affecting listener preference, likely due to its direct impact on the emotional tone of music. (Arjmand et al., 2017)
+
+-   **Explicit Content:** Songs labeled as 'Explicit' tended to be impactful, possibly reflecting listener sensitivity to lyrical content. This variable showed a significant dropout loss, indicating its strong effect in predicting dislikes or likes.
+
+-   **Genre and Word Count:** Both 'GenreCount' and 'WordCount' demonstrated notable importance, suggesting that the diversity of genres and lyrical complexity were crucial in shaping listener preferences.
+
+-   **Instrumentalness:** This variable came in as the 6^th^ most important variable for predicting if a song was liked or disliked. This is interesting given that the average for both the \"Liked\" and \"Disliked\" classes in our dataset were relatively low.
+
+**Random Forest Model:**
+
+-   **Dominant Variables:** The Random Forest analysis highlighted 'Valence', 'Explicit', 'WordCount', and 'GenreCount' as the most significant predictors. This was aligned with those of the Logistic Regression and our findings from the EDA, confirming the strong influence of these features on a song being liked.
+
+-   **Feature Interaction Sensitivity:** The Random Forest model exhibited a broader sensitivity to various features, highlighting its capacity to capture complex interactions between variables better than logistic regression.
+
+-   **Acousticness:** In the Random Forest model, Acousticness was the fifth most important variable, whereas it had no impact in the Logistic Regression model. This distinction highlighted that the Random Forest was capable of capturing interactions with variables that the Logistic Regression could not.
+
+-   **Average Duration:** 'AvgSegDuration' appeared as the eighth most important variable in the Random Forest model but was significantly less important in the Logistic Regression model. We believe this was due to its high correlation with other variables in our dataset, again underscoring the ability of the Random Forest to capture feature interactions that the Logistic Regression did not.
+
+In summary, it's noteworthy that four of the top five variables---Valence, Explicit, GenreCount, and WordCount---aligned with those identified in our exploratory analysis and part of our hypothesis. Additionally, Average Segment Duration emerged as a significant predictor for determining the likelihood of a song being liked however only for the Random Forest. Valence and Explicit dominated both in the random forest model and logistic regression, underscoring their robust influence across different modeling approaches. The high importance of Valence is likely due to its direct impact on the listener's emotional and psychological responses while explicit lyrics are often found in Rap, a genre very often found in \"disliked\" songs. GenreCount and Word count also showed a notable importance. Average Segment Duration, which measures the length of song segments, also showed some significance. This might be attributed to the tendency of pop songs, which were significantly favored in the \"Liked\" playlists, to feature shorter, catchier segments.
+
+It is also important to note that Variable Importance plots do not look into the interactivity between variables. For example Acousticness might be not important for the the Logisitic Regression on this graph, however it's interaction with Explicitness for example could drastically impact the predictive quality of the model. This is one of the major disadvantages of using Variable Importance.  
+
+#### Partial Dependence Plots
+
+```{r,eval=FALSE}
+
+# Ensure 'df_te' is your test set and the target column is appropriately named
+# Filter only numeric columns (excluding non-numeric and the target variable)
+numeric_features <- df_te[, sapply(df_te, is.numeric)]
+mean_values <- colMeans(numeric_features, na.rm = TRUE)  # Calculate means of numeric columns
+
+# Now create a data frame where one feature, e.g., 'Valence', varies and others are held constant at their mean values
+varied_feature <- data.frame(Valence = seq(min(df_te$Valence, na.rm = TRUE), max(df_te$Valence, na.rm = TRUE), length.out = 100))
+predictions_df <- as.data.frame(t(replicate(nrow(varied_feature), mean_values)))
+predictions_df$Valence <- varied_feature$Valence  # Replace 'Valence' with the feature you are testing
+
+# Ensure the model is loaded and ready for predictions
+# Predict using the model; assuming your target class 'Positive' is what you're interested in
+library(caret)  # Make sure caret package is loaded
+predictions <- predict(glmnet_model_final, newdata = predictions_df, type = "prob")$Positive
+
+# Plot
+plot(varied_feature$Valence, predictions, type = 'l', xlab = "Valence", ylab = "Probability of Positive")
+```
+
+```{r, eval=FALSE}
+#| layout-nrow: 3
+#| column: page
+#| fig-cap: 
+#|   - "PDP 1"
+#|   - "PDP 2"
+#|   - "PDP 3"
+#|   - "PDP 4"
+#|   - "PDP 5"
+#|   - "PDP 6"
+
+# Define a function to generate and display PDPs for specified features
+generate_and_plot_pdps <- function(df, glm_model, rf_model, features_of_interest) {
+  # Prepare mean values for the entire dataset
+  numeric_features <- df[, sapply(df, is.numeric)]
+  mean_values <- colMeans(numeric_features, na.rm = TRUE)
+
+  # Loop over specified features only
+  for (feature in features_of_interest) {
+    # Prepare the data frame for prediction
+    varied_values <- seq(min(df[[feature]], na.rm = TRUE), max(df[[feature]], na.rm = TRUE), length.out = 100)
+    predictions_df <- as.data.frame(t(replicate(length(varied_values), mean_values)))
+    predictions_df[[feature]] <- varied_values
+
+    # Predict probabilities for Logistic Regression
+    pred_glm <- predict(glm_model, newdata = predictions_df, type = "prob")$Positive
+    data_glm <- data.frame(Value = varied_values, Probability = pred_glm, Model = "Logistic Regression")
+
+    # Predict probabilities for Random Forest
+    pred_rf <- predict(rf_model, newdata = predictions_df, type = "prob")$Positive
+    data_rf <- data.frame(Value = varied_values, Probability = pred_rf, Model = "Random Forest")
+
+    # Combine data for plotting
+    combined_data <- rbind(data_glm, data_rf)
+
+    # Create plot for current feature
+    p <- ggplot(combined_data, aes(x = Value, y = Probability, color = Model)) +
+      geom_line() +
+      labs(title = paste("Partial Dependence Plot for", feature), x = feature, y = "Predicted Probability of Positive") +
+      theme_minimal() +
+      scale_color_manual(values = c("#3C6E71", "#FE4A49"))
+
+    # Print plot directly
+    print(p)
+  }
+}
+
+# Usage example:
+features_of_interest <- c("Valence", "Explicit", "WordCount", "GenreCount", "Instrumentalness", "AgeInDays", "AvgSegDuration")
+generate_and_plot_pdps(df_te, glmnet_model_final, rf_model_final, features_of_interest)
+```
+
+```{r, cache=TRUE}
+#| layout-nrow: 2
+#| column: page
+#| fig-cap: 
+#|   - "PDP 1"
+#|   - "PDP 2"
+#|   - "PDP 3"
+#|   - "PDP 4"
+#|   - "PDP 5"
+#|   - "PDP 6"
+#|   - "PDP 7"
+
+# Define a function to generate and display PDPs for specified features
+generate_and_plot_pdps <- function(df, glm_model, rf_model, features_of_interest) {
+  # Prepare mean values for the entire dataset
+  numeric_features <- df[, sapply(df, is.numeric)]
+  mean_values <- colMeans(numeric_features, na.rm = TRUE)
+
+  # Loop over specified features only
+  for (feature in features_of_interest) {
+    if (feature != "Explicit") {
+      # Handle continuous features with line plots
+      varied_values <- seq(min(df[[feature]], na.rm = TRUE), max(df[[feature]], na.rm = TRUE), length.out = 100)
+      predictions_df <- as.data.frame(t(replicate(length(varied_values), mean_values)))
+      predictions_df[[feature]] <- varied_values
+
+      # Predict probabilities
+      pred_glm <- predict(glm_model, newdata = predictions_df, type = "prob")$Positive
+      data_glm <- data.frame(Value = varied_values, Probability = pred_glm, Model = "Logistic Regression")
+      pred_rf <- predict(rf_model, newdata = predictions_df, type = "prob")$Positive
+      data_rf <- data.frame(Value = varied_values, Probability = pred_rf, Model = "Random Forest")
+    } else {
+      # Handle categorical feature 'Explicit' with bar plots
+      unique_values <- unique(df[[feature]])
+      predictions_df <- as.data.frame(t(replicate(length(unique_values), mean_values)))
+      predictions_df[[feature]] <- unique_values
+
+      # Predict probabilities
+      pred_glm <- predict(glm_model, newdata = predictions_df, type = "prob")$Positive
+      data_glm <- data.frame(Value = unique_values, Probability = pred_glm, Model = "Logistic Regression")
+      pred_rf <- predict(rf_model, newdata = predictions_df, type = "prob")$Positive
+      data_rf <- data.frame(Value = unique_values, Probability = pred_rf, Model = "Random Forest")
+    }
+
+    # Combine data for plotting
+    combined_data <- rbind(data_glm, data_rf)
+
+    # Create plot for current feature
+    if (feature == "Explicit") {
+      p <- ggplot(combined_data, aes(x = Value, y = Probability, fill = Model)) +
+        geom_bar(stat = "identity", position = position_dodge()) +
+        labs(title = paste("Partial Dependence Plot for", feature), x = feature, y = "Predicted Probability of Liking") +
+        theme_minimal() +
+        scale_fill_manual(values = c("#3C6E71", "#FE4A49"))
+    } else {
+      p <- ggplot(combined_data, aes(x = Value, y = Probability, color = Model)) +
+        geom_line() +
+        labs(title = paste("Partial Dependence Plot for", feature), x = feature, y = "Predicted Probability of Liking") +
+        theme_minimal() +
+        scale_color_manual(values = c("#3C6E71", "#FE4A49"))
+    }
+
+    # Print plot directly
+    print(p)
+  }
+}
+
+# Usage example:
+features_of_interest <- c("Valence", "Explicit", "WordCount", "GenreCount", "Instrumentalness", "AgeInDays", "AvgSegDuration")
+generate_and_plot_pdps(df_te, glmnet_model_final, rf_model_final, features_of_interest)
+```
+
+In order to further interpret our final two models, we conducted **Partial Dependence Plots (PDP)** using the PDP package in R.Contrary to the **Variable Importance Plots** that can be seen above, a PDP \"gives the curve representing how much the variable affects to the final prediction at which value range of the variable\" (DEI, 2019). In Layman\'s terms, we\'re looking to understand the association between a feature (e.g., Valence) and the probability of prediction of a song (e.g., Disliked) (*MLBA - S24 - Interpretable ML*, n.d.).
+
+-   Valence
+
+    -   Logistic Regression: Our results revealed that the likelihood of a song being predicted as Liked progressively increased with its Valence. Specifically, the probability around at 24% for songs with low Valence (near 0) and climbed to about ~72.5% as Valence approached 1. This demonstrated a strong positive (linear) correlation between a song's Valence and its likelihood of being predicted as Liked, suggesting that the relationship between valence and the probability of a song being liked was almost perfectly linear.
+
+    -   Random Forest: In the Random Forest model, the influence of valence on predicting whether a song was Liked was also positive but less pronounced compared to the Logistic Regression model. Across a broad range of valence levels, the probability that a song was Liked remained between \~45% and \~72.5%, suggesting that valence had a smaller impact on the outcome in the Random Forest model than in the Logistic Regression model albeit positive.
+    
+-   Explicit Content (Categorical Variable)
+
+    -   Logistic Regression: The explicit variable had a probability of 0.5% for the Logistic Regression when equal to 0 (not Explicit) and 0.3 when Explicit (=1). This was in line with our previous findings that stated that when a Song was Explicit the probability that it was liked was smaller.
+
+    -   Random Forest: The explicit variable followed the same pattern as with the Logistic Regression, however interestingly the probability of predicting a song as Liked when it was not Explicit was higher than that of the Logistic regression by ~5%. Further, when the song was Explicit it had less of a probability of predicting it as unliked when compared to that of the Logistic Regression. This was most likely due to the fact that the Random Forest was able to interpret interactivity between variables allowing it to be more subtle in its predictions.
+
+-   Word Count in Song Titles:
+
+    -   Logistic Regression: Our results showed that as the word count in a song's title increased, the likelihood of the song being predicted as "Liked" also increased linearly. The probability began at approximately ~45% with a one-word title and rose to about ~70% for titles containing 10 words. This correlation between the number of words in a song's title and its likelihood of being liked was also noted in the Exploratory Data Analysis (EDA) section of our report.
+
+    -   Random Forest: A relatively consistent probability of predicting a song as \"Liked\" was maintained, ranging from about ~59% at 1 word to 70% when at 4 words or above. This suggests that word count had a smaller impact on predicting a Liked song in this model compared to the Logistic Regression model.
+
+-   Genre Count:
+
+    -   Logistic Regression: Our results indicated a slight decrease in the probability of a song being liked as the genre count increased, dropping from approximately ~59% for songs with a single genre to about ~27.5% for songs with up to eight genres. This suggested that songs with more genre labels were less likely to be liked.
+
+    -   Random Forest: Our results showed a higher, more consistent probability of a song being liked, ranging from about ~67.5% to ~56%, even as the genre count increased from 1 to 8 genres. This indicated a less pronounced impact on song likability compared to the Logistic Regression model.
+
+-   Instrumentalness:
+
+    -   Logistic Regression: Our results showed a decreasing trend in likability as Instrumentalness increased, starting at approximately 52.5% for non-instrumental tracks and dropping to around 25% for fully instrumental tracks. This suggested that songs with higher instrumental content were generally less liked.
+
+    -   Random Forest: Our results displayed very minimal change, maintaining the likelihood of a song being liked at about 70% when a song wasn't instrumental to 57% at full instrumentalness. This indicated that Instrumentalness did not significantly impact song likability in this model.
+
+-   Age in Days:
+
+    -   Logistic Regression: There was a general increase in the likelihood of a song being predicted Liked as it ages, starting from about \~45% for newer songs and maxing out to \~66% as it aged. This indicates that older songs are more appealing to Camille\'s taste.
+
+    -   Random Forest: Our results showed a less linear pattern starting at around 63%, remaining stable until around ~12500 days then drastically increasing the probability to ~77.5% of predicting a liked song. 
+    
+-   Average Segment Duration:
+
+    -   Logistic Regression: Our results showed a increasing linear trend starting from ~45% when the average duration was around 0.2, as it increased so did the probability of predicting a Liked song reaching ~ 57% prediction at an average duration of 0.4. 
+
+    -   Random Forest: Our results showed a less straightforward pattern, with the prediction probability of a liked song starting at ~46% at 0.2 duration, then drastically increasing to ~67.5% as we changed from 0.2 to 0.25. It plateaus out between 0.25 and 0.35 then drops again after to approximately ~57% probability of predicting a liked song. 
+    
+    
+The PDPs were intriguing and highlighted the differences in how different models---specifically our Logistic Regression and Random Forest---processed features in relation to predicting a song being Liked. The Logistic Regression demonstrated a "broader" sensitivity to changes in feature values, while the Random Forest generally showed more stability in probability outcomes across different levels of a feature, such as the impact on the probability of predicting a song Liked when the Valence increased. Our hypothesis was that Random Forests handled non-linear relationships and interactions better than Logistic Regression (Hershy, 2020).

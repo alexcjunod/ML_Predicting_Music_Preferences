@@ -1,0 +1,11 @@
+"0","library(reticulate)"
+"0","# Create a new Conda environment"
+"0","conda_create(""spotify_env"")"
+"2","+ /Users/alexanderjunod/Library/r-miniconda/bin/conda create --yes --name spotify_env 'python=3.10' --quiet -c conda-forge
+"
+"2","
+CondaValueError: prefix already exists: /Users/alexanderjunod/Library/r-miniconda/envs/spotify_env
+
+"
+"2","Error: Error creating conda environment 'spotify_env' [exit code 1]
+"

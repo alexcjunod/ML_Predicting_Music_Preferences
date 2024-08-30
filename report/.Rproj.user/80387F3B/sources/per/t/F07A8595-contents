@@ -1,0 +1,893 @@
+---
+bibliography: alex.bib
+---
+
+# 2. Data
+
+```{r setup data, echo = FALSE, message = FALSE}
+# Here I am referencing the setup file that goes with my project. 
+source(here::here("scripts/setup.R"))
+```
+
+## 2.1 Sources
+
+We extracted our Road Safety Data from the UK Government's data sets for 2022, focusing specifically on road incidents. To answer our four research questions, we used four main data sets, each providing essential details about 2022 UK road accidents.
+
+::: column-margin
+| Num \# | Name                                                                                                                                                                                               |
+|-----------------|-------------------------------------------------------|
+| 1      | [Collision Statistics](https://www.data.gov.uk/dataset/cb7ae6f0-4be6-4935-9277-47e5ce24a11f/road-safety-data/datafile/7720d2c6-1282-47b5-b77b-90749457788b/preview "Link to Collision Statistics") |
+| 2      | [Vehicle Statistics](https://www.data.gov.uk/dataset/cb7ae6f0-4be6-4935-9277-%2047e5ce24a11f/road-safety-data/datafile/8d02ed6a-7023-48e6-bdbe-c44c5f9e6214/preview "Link to Vehicle Statistics")  |
+| 3      | [Casualty Statistics](https://www.data.gov.uk/dataset/cb7ae6f0-4be6-4935-9277-47e5ce24a11f/road-safety-data/datafile/478bc069-38ce-406a-b297-f4d73e43a03e/preview "Link to Casualty Statistics")   |
+| 4      | [Legend](https://www.data.gov.uk/dataset/cb7ae6f0-4be6-4935-9277-47e5ce24a11f/road-safety-data/datafile/478bc069-38ce-406a-b297-f4d73e43a03e/preview "Link to Legend")                             |
+
+Links to dataset sources
+:::
+
+Each dataset Collision, Vehicle and Casualty contain a "accident_index" which links each of the datasets together. Furthermore, both the casualty and vehicle datasets contain a "reference" as well, which is assigned to each vehicle or casualty involved in an accident within a collision. This allows for more granular analysis, such as if we want to identify which casualties were in which vehicle within a certain accident. The relationship between these three datasets can be seen in (Table XXX):
+
+![Understanding dataset relationships](images/IntraRelationship-01.png)In the table above, we can observe the inter-relationship between our datasets. Each row in the collision dataset (thus forward named accident dataset for simplicity) represents a single accident occurrence. Each row in the vehicle dataset represents a unique vehicle associated to this collision (it's important to note that there can be multiple vehicles per a single accident). Furthermore, in the casualty dataset, we have an individual row per casualty. The vehicle reference is apparent in both the vehicle and casualty dataset allowing us to be able to identify which casualty was in which vehicle and in which accident.
+
+## 2.2 Description of Datasets
+
+### DS 1: Collision Statistics
+
+##### Description:
+
+This data set encompasses detailed information on each road accident in the UK. It includes a comprehensive range of features such as the location of the accident, the time it occurred, the severity of the collision, and the type of road involved. This data set is crucial as it provides a holistic view of all road collisions that occurred in the specified period.
+
+```{r ds1}
+#| column: screen-inset-right
+# This code imports the accident_df from the file directory - which is the file where we are keeping the document. 
+accident_data_path <- here::here("data", "dft-road-casualty-statistics-collision-2022.csv")
+accident_df <- read.csv(accident_data_path)
+
+# Here we are creating a descriptive data frame for the collision dataset
+accident_columns <- data.frame(
+  "Name" = names(accident_df),
+  "Type" = sapply(accident_df, function(column) class(column)[1]), 
+  "Example" = sapply(accident_df, function(column) column[1]),  
+  "Explanation" = c(
+    "A unique value for each accident. It combines the accident_year and accident_reference to form a unique ID. It can be used to join with the Vehicle and Casualty datasets.",
+    "The year in which the accident occurred.",
+    "An ID used by the police to reference a collision within a specific year. It is not unique outside of the year, so accident_index should be used for linking to other years.",
+    "The easting coordinate of the accident location in OSGB36 National Grid format. It may be null if the location is not known.",
+    "The northing coordinate of the accident location in OSGB36 National Grid format. It may be null if the location is not known.",
+    "The longitude coordinate of the accident location. It may be null if the location is not known.",
+    "The latitude coordinate of the accident location. It may be null if the location is not known.",
+    "The police force responsible for the area where the accident occurred. It is represented as a numerical code and corresponds to different police forces.",
+    "The severity of the accident, categorized as: 1: Fatal 2: Serious 3: Slight",
+    "The number of vehicles involved in the accident.",
+    "The total number of casualties (injuries or fatalities) in the accident.",
+    "The date of the accident in DD/MM/YYYY format.",
+    "The day of the week when the accident occurred, categorized as: 1: Sunday 2: Monday 3: Tuesday 4: Wednesday 5: Thursday 6: Friday 7: Saturday",
+    "The time at which the accident occurred, represented in hours and minutes.",
+    "The local authority district where the accident occurred. It is represented as a numerical code corresponding to different districts.",
+    "The local authority district in ONS (Office for National Statistics) code format where the accident occurred.",
+    "The local authority responsible for the highway where the accident occurred.",
+    "The classification of the first road involved in the accident, categorized as: 1: Motorway 2: A(M) 3: A 4: B 5: C 6: Unclassified -1: Data missing or out of range",
+    "The number of the first road involved in the accident, or unknown if not available. It depends on the road class.",
+    "The type of road where the accident occurred.",
+    "The speed limit on the road where the accident occurred. Valid values are 20, 30, 40, 50, 60, or 70. Other values represent data missing or out of range.",
+    "Details about the type of junction where the accident occurred.",
+    "Information about the control at the junction where the accident occurred.",
+    "Similar to first_road_class, but for the second road involved in the accident.",
+    "Similar to first_road_number, but for the second road involved in the accident.",
+    "Information about pedestrian crossing control within 50 meters of the accident, categorized as: 0: None within 50 meters 1: Control by school crossing patrol 2: Control by other authorized person",
+    "Information about pedestrian crossing physical facilities within 50 meters of the accident.",
+    "The light conditions at the time of the accident.",
+    "The weather conditions at the time of the accident.",
+    "The road surface conditions at the time of the accident",
+    "Special conditions at the accident site",
+    "Hazards on the carriageway at the accident site.",
+    "Indicates whether the accident occurred in an urban or rural area.",
+    "Indicates whether a police officer attended the scene of the accident.",
+    "Indicates whether the road is a trunk road managed by Highways England or non-trunk.",
+    "For England and Wales only, this field provides information about the Lower Layer Super Output Area (LSOA) of the accident location."
+    )
+)
+# This code is executing the table that we had created previously, we took off row names, and added a title, the class is in reference to the visual format we want. 
+datatable(accident_columns, rownames = FALSE, caption = "Collision Dataset Variables", class = 'cell-border stripe')
+```
+
+##### Key Features:
+
+-   Includes `r ncol(accident_df)` different variables.
+
+-   Contains over `r nrow(accident_df)` observations.
+
+##### Relevance:
+
+-   Used for research questions 1-4
+
+### DS 2: Vehicle Statistics
+
+##### Description:
+
+This data set offers detailed information concerning all vehicles involved in collisions and their drivers within the UK in 2022. It encompasses a variety of data points, including but not limited to, the type of vehicle involved, its engine capacity, etc. This dataset is instrumental in understanding the impacts of specific vehicle characteristics on road collisions in the UK.
+
+```{r ds2}
+#| column: screen-inset-right
+# For documentation on this cell block, please refer to the previous one (accident_df)
+vehicle_data_path <- here::here("data", "dft-road-casualty-statistics-vehicle-2022.csv")
+vehicle_df <- read.csv(vehicle_data_path)
+vehicle_columns <- data.frame(
+  "Name" = names(vehicle_df),
+  "Type" = sapply(vehicle_df, function(column) class(column)[1]),  
+  "Example" = sapply(vehicle_df, function(column) column[1]),  
+  "Explanation" = c(
+    "A unique value for each accident. It combines the accident_year and accident_reference to form a unique ID. It can be used to join with the Vehicle and Casualty datasets.",
+    "The year in which the accident occurred.",
+    "An ID used by the police to reference a collision within a specific year. It is not unique outside of the year, so accident_index should be used for linking to other years.",
+    "An ID assigned to each vehicle involved in an accident within the same collision.",
+    "The type of vehicle involved in the accident. See code/format for vehicle type mapping.",
+    "Indicates whether the vehicle was towing or articulated in some way. See code/format for towing and articulation mapping.",
+    "Describes the manoeuvre of the vehicle before the accident. See code/format for vehicle manoeuvre mapping.",
+    "The direction from which the vehicle was traveling before the accident. See code/format for vehicle direction mapping.",
+    "The direction to which the vehicle was traveling before the accident. See code/format for vehicle direction mapping.",
+    "The location of the vehicle on the road, including restricted lanes. See code/format for vehicle location mapping.",
+    "Indicates whether the vehicle skidded or overturned during the accident. See code/format for skidding and overturning mapping.",
+    "Indicates if the vehicle hit an object in the carriageway during the accident. See code/format for hit object in carriageway mapping.",
+    "Indicates if the vehicle left the carriageway during the accident. See code/format for vehicle leaving carriageway mapping.",
+    "Describes the first point of impact on the vehicle. See code/format for first point of impact mapping.",
+    "Indicates whether the vehicle is left-hand drive or not. See code/format for left-hand drive mapping.",
+    "The purpose of the driver's journey. See code/format for journey purpose of driver mapping.",
+    "The sex of the driver. See code/format for sex of driver mapping.",
+    "The age of the driver.",
+    "The age band of the driver. See code/format for age band of driver mapping.",
+    "The engine capacity of the vehicle in cubic centimeters (cc).",
+    "The propulsion code of the vehicle. See code/format for propulsion code mapping.",
+    "The age of the vehicle.",
+    "The make and model of the vehicle.",
+    "The IMD (Index of Multiple Deprivation) decile of the driver's residence. See code/format for IMD decile mapping.",
+    "The type of driver's home area. See code/format for driver home area type mapping.",
+    "The LSOA (Lower Layer Super Output Area) of the driver's residence.",
+    "An ID used to reference a collision within a specific year.",
+    "The location of the junction where the accident occurred."
+  )
+)
+
+
+datatable(vehicle_columns, rownames = FALSE, caption = "Vehicle Dataset Variables", class = 'cell-border stripe')
+```
+
+##### Key Features:
+
+-   Includes `r ncol(vehicle_df)` distinct variables.
+
+-   Contains over `r nrow(vehicle_df)`
+
+##### Relevance:
+
+-   Used for research questions 3 & 4
+
+### DS 3: Casualty Statistics
+
+##### Description:
+
+This dataset delivers in-depth insights into casualties resulting from road accidents in the UK during 2022. It contains a broad spectrum of variables, including but not limited to, casualty age, gender, the severity of their injuries, type of casualty (such as driver/passenger or pedestrian). This dataset is essential for a detailed analysis on individual's demographics and their impact on road accidents.
+
+```{r ds3}
+#| column: screen-inset-right
+# For documentation on this cell block, please refer to the previous one (accident_df)
+casualty_data_path <- here::here("data", "dft-road-casualty-statistics-casualty-2022.csv")
+casualty_df <- read.csv(casualty_data_path)
+
+explanations <- c(
+  "A unique value for each accident. It combines the accident_year and accident_reference to form a unique ID. It can be used to join with the Vehicle and Casualty datasets.",
+  "The year in which the accident occurred.",
+  "An ID used by the police to reference a collision within a specific year. It is not unique outside of the year, so accident_index should be used for linking to other years.",
+  "An ID assigned to each vehicle involved in an accident within the same collision.",
+  "An ID used to reference a casualty within a specific accident.",
+  "The class of the casualty. See code/format for casualty class mapping.",
+  "The gender of the casualty. See code/format for gender mapping.",
+  "The age of the casualty.",
+  "The age band of the casualty. See code/format for age band mapping.",
+  "The severity of the casualty. See code/format for casualty severity mapping.",
+  "The location of the pedestrian during the accident. See code/format for pedestrian location mapping.",
+  "The movement of the pedestrian during the accident. See code/format for pedestrian movement mapping.",
+  "Indicates whether the casualty was a car passenger.",
+  "Indicates whether the casualty was a bus or coach passenger.",
+  "Indicates whether the casualty was a pedestrian road maintenance worker.",
+  "The type of casualty. See code/format for casualty type mapping.",
+  "The home area type of the casualty. See code/format for home area type mapping.",
+  "The IMD (Index of Multiple Deprivation) decile of the casualty's residence. See code/format for IMD decile mapping.",
+  "The Lower Layer Super Output Area (LSOA) of the casualty's residence."
+)
+
+casualty_columns <- data.frame(
+  "Name" = names(casualty_df),
+  "Type" = sapply(casualty_df, function(column) class(column)[1]),  
+  "Example" = sapply(casualty_df, function(column) ifelse(length(column) > 0, as.character(column[1]), NA)),  
+  "Explanation" = explanations  
+)
+
+datatable(casualty_columns, rownames = FALSE, caption = "Casualty Dataset Variables", class = 'cell-border stripe', options = list(pageLength = 10))
+```
+
+##### Key Features:
+
+-   Includes `r ncol(casualty_df)` distinct variables.
+
+-   Contains a total of `r nrow(casualty_df)` observations.
+
+##### Relevance:
+
+-   Used for research questions 3 & 4
+
+### **DS 4: Legend**
+
+##### Description:
+
+This dataset provides the legends to the fields present in our three accident data sets. It is a key resource for understanding and interpreting the data, especially in identifying and decoding missing values. It includes detailed information on what specific values signify a "missing value" or "other" in each column, thereby facilitating accurate data analysis.
+
+::: column-margin
+| table (dataset) | field_name      | code/format | label     |
+|-----------------|-----------------|-------------|-----------|
+| Vehicle         | propulsion_code | 1           | Petrol    |
+| Vehicle         | propulsion_code | 2           | Heavy oil |
+| Vehicle         | propulsion_code | 3           | Electric  |
+
+Example of Legend dataset
+:::
+
+##### Key Features:
+
+-   Consists of one large table
+
+##### Relevance:
+
+-   Allows understanding of data sets 1-3.
+
+## 2.3 Data Preparation
+
+### 2.3.1 Joining Datasets
+
+One of the primary challenges associated with the data provided by the UK Government was its format. Combining all the information from the three datasets into a single dataset would have been a daunting task, necessitating the sacrifice of critical details. A notable limitation of this dataset-splitting approach used by the UK Government was the absence of granular data on casualties and vehicles within the accident database, as well as the unavailability of vehicle information in the casualty database. This limitation became apparent when we encountered difficulties in obtaining more detailed information about specific accidents. Therefore, in the future, it would be advisable to procure a dataset that consolidates accident, casualty, and vehicle characteristics into a single, unified dataset. This approach would help eliminate potential biases and facilitate seamless cross-referencing across all three data sets.
+
+::: column-margin
+| Severity Classification | Injuries Sustained                                                                                                                                                                                                                                                            |
+|------------------|------------------------------------------------------|
+| Fatal                   | Deceased                                                                                                                                                                                                                                                                      |
+| Serious                 | Broken neck or back, Severe head injury, unconscious, Severe chest injury, any difficulty breathing, Internal injuries, Multiple severe injuries, unconscious, Loss of arm or leg (or part), Fractured pelvis or upper leg, Deep penetrating wound, Multiple severe injuries, |
+| Slight                  | Whiplash or neck pain, Shallow cuts / lacerations / abrasions, Sprains and strains, Bruising, Shock                                                                                                                                                                           |
+
+: Examples of Injuries per Severity
+:::
+
+To address these issues to the best of our abilities, we took specific steps before proceeding with our analysis, to limit any potential biases. We aimed to introduce more detailed information on severity and vehicle types across all datasets (see table x for precise details on each severity level). Initially, the accident database contained an "accident_severity" column that indicated the worst severity of the accident. For instance, if an accident resulted in one fatality and 16 slight injuries, the column would display "Fatal." However, this representation was not statistically suitable for analysis, as it would be completely biased for running statistical tests and regressions. Therefore, through data wrangling techniques we calculated and added three new columns to both the accident and vehicle databases. These additional columns provided the counts of slight, fatal, and serious casualties, offering a more nuanced view of accident severity.
+
+Furthermore, we conducted a similar data wrangling process to enhance the accident database by adding columns that indicated the quantity of "Cars, Motorcycles, Trucks Cyclists, and"Other" vehicles involved in each accident. This data integration and transformation process significantly improved the quality and granularity of our dataset. Once this integration was complete, we could begin our analysis to identify any missing values that needed to be addressed.
+
+![Example process of merging datasets](images/joiningdatasets.png)
+
+```{r adding number of casualties to accident df, echo=FALSE}
+# In this code block we are adding three columns to the accident data frame, which includes the number of slight, serious and fatal injuries per accident. 
+aggregated_casualties <- casualty_df %>%
+  group_by(accident_index, casualty_severity) %>% # Here we quickly group by the accident index (this is the code that is shared between our dataset) and then the casualty severity
+  summarise(count = n()) %>%
+  spread(key = casualty_severity, value = count, fill = 0) %>%
+  rename(
+    num_fatal = '1',
+    num_serious = '2',
+    num_slight = '3'
+  )
+
+accident_df <- left_join(accident_df, aggregated_casualties, by="accident_index") #Then here we join this to the original accident_df which is our main accident dataset
+```
+
+```{r adding date column to vehicle, echo=FALSE, message=FALSE}
+# In this cell block we are adding the date to the vehicle dataset, through a join from the accident_df
+vehicle_df<- vehicle_df %>%
+  left_join(accident_df %>% select(accident_index, date), by = "accident_index")
+```
+
+```{r adding casualties per severuity to vehicle , echo=FALSE}
+# In this code block we are adding the number of casualties per casualty severity (like we did with the accident_df) to the vehcile dataframe. 
+aggregated_casualties <- casualty_df %>%
+  group_by(accident_index, vehicle_reference, casualty_severity) %>%
+  summarise(count = n(), .groups = 'drop') %>%
+  pivot_wider(
+    names_from = casualty_severity, 
+    values_from = count, 
+    values_fill = list(count = 0)
+  ) %>%
+  rename(
+    num_fatal = '1',
+    num_serious = '2',
+    num_slight = '3'
+  )
+
+# Here I am simply left joining the aggregated casualties that I calculated previously with the vehcile dataframe as dicussed. 
+vehicle_df <- vehicle_df %>%
+  left_join(aggregated_casualties, by = c("accident_index", "vehicle_reference"))
+
+vehicle_df <- vehicle_df %>%
+  replace(is.na(.), 0) # Here I am replacing all the n/a's with a 0 
+```
+
+```{r creating vehicle categories, echo=FALSE}
+# Since our data in encoded, the following code is looking at the "vehicle_type" and looking at specific codes. We are then creating categories that are easier to work with for our analysis. For example in this case, we would be taking taxi's, regular cars, private drivers (ex: UBERS) and grouping them into one cateogory "Car". It then creates a new column named vehicle_category, which puts the text either "Cyclist, Car, Motorcycle". This makes the analysis easier, and allows for better outputs from any statistical test, or graphics.
+
+vehicle_df <- vehicle_df %>%
+  mutate(vehicle_category = case_when( # this looks for the case in the row when the vehcile_type is equal to a specific code --> for example 1 is a bike
+    vehicle_type %in% c(1) ~ "Cyclist",
+    vehicle_type %in% c(2, 3, 4, 5, 23, 97, 103, 104, 105, 106) ~ "Motorcycle",
+    vehicle_type %in% c(8, 9, 108, 109) ~ "Car",
+    vehicle_type %in% c(19, 20, 21, 98, 113) ~ "Trucks",
+    TRUE ~ "Other"  # For vehicle types that don't fall into these categories
+  ))
+
+
+casualty_df <- casualty_df %>%
+  mutate(vehicle_category = case_when(
+    casualty_type %in% c(1) ~ "Cyclist",
+    casualty_type %in% c(2, 3, 4, 5, 23, 97, 103, 104, 105, 106) ~ "Motorcycle",
+    casualty_type %in% c(8, 9, 108, 109) ~ "Car",
+    casualty_type %in% c(19, 20, 21, 98, 113) ~ "Trucks",
+    TRUE ~ "Other"  # For vehicle types that don't fall into these categories
+  ))
+
+aggregated_vehicles <- vehicle_df %>%
+  group_by(accident_index, vehicle_category) %>%
+  summarise(count = n(), .groups = 'drop') %>%
+  pivot_wider(
+    names_from = vehicle_category, 
+    values_from = count, 
+    values_fill = list(count = 0)
+  )
+accident_df <- left_join(accident_df, aggregated_vehicles, by = "accident_index")
+```
+
+### 2.3.2 Missingness of Data 
+
+Our initial examination of the datasets revealed a lack of uniformity in the indicators used for missing values. Rather than a single standard marker, various characters, unique to each row, signified the absence of data. This inconsistency introduced an additional challenge, necessitating the identification and correct interpretation of these distinct characters for each variable to accurately assess missing values. For example, we observed that three variables in our data set employed different characters to denote missing information (see example in table below).
+
+::: column-margin
+*Example of missing values per different columns:*
+
+|                     |                          |
+|---------------------|--------------------------|
+| Variable Name       | Missing Value Character  |
+| junction_detail     | -1 or 99                 |
+| junction_control    | -1 or 9                  |
+| second_road_number  | -1 or 0                  |
+:::
+
+We therefore established a "missing values dictionary" that holds the name of missing values for all variables in our three data sets, namely Accident Statistics, Casualty Statistics, and Vehicle Statistics. We then used this dictionary to lookup individually and we replaced the missing values with N/A's in each of the columns across all three of our datasets through the use of a function (see code block).
+
+The visualizations presented below illustrate the distribution of missing values within our datasets. We were able to accomplish this through the utilization of the *visdat* package, which provided us with visualization insights to allow us to understand extent of missing data within our data frames.
+
+```{r dictionary creation, eval=FALSE}
+#This code is an example of the dictionary that we created (and saved separately alongside the datasets)
+missing_codes_accident <- list(
+  police_force = NULL,
+  accident_severity = NULL,
+  number_of_vehicles = -1,
+  number_of_casualties = -1,
+  date = NULL,
+  day_of_week = NULL,
+  time = NULL,
+  local_authority_district = -1,
+  local_authority_ons_district = -1,
+  local_authority_highway = -1,
+  first_road_class = -1,
+  first_road_number = c(-1, 0),
+  road_type = c(-1, 9),
+  speed_limit = c(-1, 99),
+  junction_detail = c(-1, 99),
+  junction_control = c(-1, 9),
+  second_road_class = c(-1, 9),
+  second_road_number = c(-1, 0),
+  pedestrian_crossing_human_control = c(-1, 9),
+  pedestrian_crossing_physical_facilities = c(-1, 9),
+  light_conditions = -1,
+  weather_conditions = c(-1, 9),
+  road_surface_conditions = c(-1, 9),
+  special_conditions_at_site = c(-1, 9),
+  carriageway_hazards = c(-1, 9),
+  urban_or_rural_area = c(-1, 3),
+  did_police_officer_attend_scene_of_accident = c(-1, 3),
+  trunk_road_flag = -1,
+  lsoa_of_accident_location = c(NaN, NA, "NULL", -1),
+  accident_index = c(NaN, NA, "NULL"),
+  accident_index = c(NaN, NA, "NULL"),
+  accident_reference = c(NaN, NA, "NULL"),
+  location_easting_osgr = c(NaN, NA, "NULL"),
+  location_northing_osgr = c(NaN, NA, "NULL"),
+  longitude = c(NaN, NA, "NULL"),
+  latitude = c(NaN, NA, "NULL"),
+  accident_year = c(NaN, NA, "NULL")
+)
+
+missing_codes_vehicle <- list(
+  vehicle_reference = NULL,
+  vehicle_type = c(-1, 99),
+  towing_and_articulation = c(-1, 9),
+  vehicle_manoeuvre = c(-1, 99),
+  vehicle_direction_from = c(-1, 9),
+  vehicle_direction_to = c(-1, 9),
+  vehicle_location_restricted_lane = c(-1, 99),
+  junction_location = c(-1, 9),
+  skidding_and_overturning = c(-1, 9),
+  hit_object_in_carriageway = c(-1, 99),
+  vehicle_leaving_carriageway = c(-1, 9),
+  hit_object_off_carriageway = c(-1, 99),
+  first_point_of_impact = c(-1, 9),
+  vehicle_left_hand_drive = c(-1, 9),
+  journey_purpose_of_driver = c(15, 5, -1),
+  sex_of_driver = c(-1, 3),
+  age_of_driver = c(-1, "-1"),
+  age_band_of_driver = -1,
+  engine_capacity_cc = -1,
+  propulsion_code = -1,
+  age_of_vehicle = NULL,
+  generic_make_model = -1,
+  driver_imd_decile = -1,
+  driver_home_area_type = -1,
+  lsoa_of_driver = NULL
+)
+
+missing_codes_casualty <- list(
+  casualty_reference = NULL,
+  casualty_class = NULL,
+  sex_of_casualty = c(-1, 9),
+  age_of_casualty = -1,
+  age_band_of_casualty = -1,
+  casualty_severity = -1,
+  pedestrian_location = c(-1, 10),
+  pedestrian_movement = c(-1, 9),
+  car_passenger = c(-1, 9),
+  bus_or_coach_passenger = c(-1, 9),
+  pedestrian_road_maintenance_worker = -1,
+  casualty_type = c(-90, 99, -1),
+  casualty_imd_decile = -1,
+  casualty_home_area_type = -1,
+  lsoa_of_casualty = NULL
+)
+```
+
+```{r sourcing missing value dictionary, echo=FALSE}
+#Sourcing the "missing values dictionary" that we created, which use the same codes as above. 
+source(here::here("scripts", "missingvaluelist.R"))
+```
+
+```{r checking for missing values using function, echo=FALSE}
+#| column: screen-inset-right
+#| layout-nrow: 2
+
+# This function (replace_custom_missing_with_N/A" is helping us solve the issue - it's running through our database(s) and is replacing our specific values with N/A (this allows for us to replace or delete them all at once! Super cool right!!)
+replace_custom_missing_with_NA <- function(df, missing_codes) {
+  for (col_name in names(missing_codes)) {
+    missing_values <- missing_codes[[col_name]]
+    if (!is.null(missing_values)) {
+      # Convert missing_values to vector if it's a single value
+      missing_values <- as.vector(missing_values)
+      # Replace missing codes with NA
+      df[[col_name]][df[[col_name]] %in% missing_values] <- NA
+    }
+  }
+  df
+}
+# This little function is doing the same thing as the function above, but it's just replacing all the values that are -1 with N/A --> for some reason my previous code was not able to evaluate -1's from the list. Therefore I put this function in as a FAILSAFE (Always good to have - if yours works without great :) ) 
+
+replace_minus_ones_with_NA <- function(df) {
+  df[df == -1] <- NA
+  return(df)
+}
+
+# We now apply the first function that we have created to EACH of our datasets, so that it runs through them and replaces all the missing code values with an N/A
+accident_df <- replace_minus_ones_with_NA(accident_df)
+vehicle_df <- replace_minus_ones_with_NA(vehicle_df)
+casualty_df <- replace_minus_ones_with_NA(casualty_df)
+
+# We now apply the second function that we have created to EACH of our datasets, so that it runs through them and replaces all -1's with an N/A
+accident_df <- replace_custom_missing_with_NA(accident_df, missing_codes_accident)
+vehicle_df <- replace_custom_missing_with_NA(vehicle_df, missing_codes_vehicle)
+casualty_df <- replace_custom_missing_with_NA(casualty_df, missing_codes_casualty)
+
+
+# The following lines of code visualize missing data and data class through the use of a cool package (visdat) - you need to use the {warn_large_data = FALSE} since it will produce an error if not. If you're in a hurry, comment these out, they take ALOT of computational power and time to run. 
+#vis_miss(accident_df, warn_large_data = FALSE)
+#vis_miss(vehicle_df, warn_large_data = FALSE)
+#vis_miss(casualty_df, warn_large_data = FALSE)
+```
+
+We observed that both the accident and vehicle data sets had the largest proportion of missing values: `r sum(is.na(vehicle_df))` missing values (`r round(sum(is.na(vehicle_df)) / (nrow(vehicle_df) * ncol(vehicle_df)) * 100, 2)`%) and `r sum(is.na(accident_df))` missing values (`r round(sum(is.na(accident_df)) / (nrow(accident_df) * ncol(accident_df)) * 100, 2)`%) respectively. However thankfully, it can also be noted that our *casualty* dataset was less impacted by missing values `r sum(is.na(casualty_df))` missing values (`r round(sum(is.na(casualty_df)) / (nrow(casualty_df) * ncol(casualty_df)) * 100, 2)`%). (N.B - we also checked for duplicate rows, in which we found that there are `r sum(duplicated(accident_df)) + sum(duplicated(vehicle_df)) + sum(duplicated(casualty_df))` duplicate rows in the dataset.)
+
+It is important to note that the column *local_authority_district* is completely missing, therefore we will go ahead and delete this column from our dataset directly now.
+
+This discovery led us to realize that the extent of missing values across various variables was greater than initially anticipated. Considering that not every data set and variable was essential for each research question, we decided to construct smaller, question-specific data sets (hyperlink "creation of mini datasets"). This approach enabled us to strategically remove rows with missing values from these focused data sets (rather than the original data sets), based on their relevance to the specific research question. By doing so, we selectively eliminated missing data only from variables critical to a particular question, thereby minimizing overall data loss.
+
+```{r dropping unneeded columns with high missing value proportions, echo=FALSE}
+# These codes drop columns that were unused throughout the analysis, this makes viewing and working with the datasets easier (and can increase the speed)
+accident_df <- subset(accident_df, select = -local_authority_district)
+accident_df <- subset(accident_df, select = -second_road_number)
+accident_df <- subset(accident_df, select = -first_road_number)
+```
+
+```{r quick check for missing values, echo=FALSE, eval=FALSE}
+#This is a function that we wrote that goes over our datasets, and checks to see if there are any "missing values" from our dictionary. If replicating our project, with a more recent dataset from the UK Government, please assure that you have checked that the missing characters have not changed. You should check the LEGEND dataset file available from their website and follow our process. You can them simply make any changes in the corresponding missing values dictionary saved in the file directory and you're good to go!
+count_missing_values <- function(df, missing_codes) {
+  count <- 0
+  for (col_name in names(missing_codes)) {
+    missing_values <- missing_codes[[col_name]]
+    if (!is.null(missing_values)) {
+      # Convert missing_values to vector if it's a single value
+      missing_values <- as.vector(missing_values)
+      # Count missing codes
+      count <- count + sum(df[[col_name]] %in% missing_values, na.rm = TRUE)
+    }
+  }
+  return(count)
+}
+
+# Counting missing values for each dataset
+missing_count_accident <- count_missing_values(accident_df, missing_codes_accident)
+missing_count_vehicle <- count_missing_values(vehicle_df, missing_codes_vehicle)
+missing_count_casualty <- count_missing_values(casualty_df, missing_codes_casualty)
+
+# Output the counts
+missing_count_accident
+missing_count_vehicle
+missing_count_casualty
+```
+
+```{r secondary quick check for missing values with function, eval=FALSE}
+
+count_missing_values <- function(df, missing_codes) {
+  missing_count_list <- list()
+  for (col_name in names(missing_codes)) {
+    if (!col_name %in% names(df)) {
+      next # Skip if the column is not in the dataframe
+    }
+
+    missing_values <- missing_codes[[col_name]]
+    if (!is.null(missing_values)) {
+      # Convert missing_values to vector if it's a single value
+      missing_values <- as.vector(missing_values)
+      # Count missing codes in the column
+      column_count <- sum(df[[col_name]] %in% missing_values, na.rm = TRUE)
+      missing_count_list[[col_name]] <- column_count
+    }
+  }
+  return(missing_count_list)
+}
+
+# Counting and printing missing values for each dataset
+missing_count_accident <- count_missing_values(accident_df, missing_codes_accident)
+missing_count_accident
+```
+
+### 2.3.3 Formatting our data
+
+```{r visualizing data formats, echo=FALSE}
+#| column: screen-inset-right
+#| layout-nrow: 2
+vis_dat(accident_df, warn_large_data = FALSE)
+vis_dat(vehicle_df, warn_large_data = FALSE)
+vis_dat(casualty_df, warn_large_data = FALSE)
+```
+
+```{r reclassifying columns, echo=FALSE}
+# In the following code blocks we are changing the class/format of the columns of our accident_df
+accident_df$date <- as.Date(accident_df$date, format = "%d/%m/%Y") # Here we change the date to an actual date format
+accident_df$time <- hms::as_hms(paste0(accident_df$time, ":00")) # Here we change the time to a actual date time format
+accident_df$hour <- as.integer(format(as.POSIXct(accident_df$time, format='%H:%M:%S'), '%H')) #Here we take the hour as an integer from the time column
+# The next two lines change the lat and long from a character to a numerical class (required for lots of computations and map making)
+accident_df$latitude <- as.numeric(accident_df$latitude) 
+accident_df$longitude <- as.numeric(accident_df$longitude)
+```
+
+Also using the *visdat* package we used the *vis_miss* function to visualize both the missingness as well as provides a visual reference regarding the class of each of the columns. Through the use of this tool we noticed that many columns in our datasets were in character or integer format. We corrected this by converting columns like date, time, latitude, and longitude into their appropriate data types. For example, latitude and longitude columns were changed to numerical classes.
+
+Now that we know that a significant amount of values are missing from our dataset, we determined that the best way to proceed to ensure that a minimal amount of data deletion will be necessary is to create datasets containing only the variables that are necessary for our each of our questions given the fact that we are unable to simply replace these values using existing data replacement techniques such as imputing with the mean or median. In the next section we will discuss the creation of new datasets and will also delete all missing values automatically if they're N/A as well as the changes of the data class.
+
+### 2.3.4 Creating mini datasets for each research question
+
+As mentioned previously, the discovery of the extent of missing values within our three datasets was greater than initially anticipated. Considering that not every data set and variable was essential for each research question, we decided to construct smaller, question-specific data sets. This approach enabled us to strategically remove rows with missing values from these focused data sets (rather than the original data sets), based on their relevance to the specific research question. By doing so, we selectively eliminated missing data only from variables critical to a particular question, thereby minimizing overall data loss. We determined that despite increasing complexity, it was the right choice moving forward. Traditionally other steps can be taken to replace missing values within ones data set through a method named imputation, where one could take the median for example. However given that our dataset is in regards to accidents, and given it's categorical nature, this is not possible. We have therefore determined that our best course of action will be to delete these missing values.
+
+##### Research Question 1 Dataset:
+
+```{r creation of mini dataset 1}
+# This code manually selects the variables that we wanted to keep from the accident_df to be put in our dataset that we will be continuing with. If you'd like to add a variable to the dataset which you'd like to work with later, make sure you put it here. My suggestion is to import the legend dataset, which will explain the meaning of the variable and what each individual code that it has means. 
+df1var <- c("accident_index", "accident_reference", "longitude", "latitude", "location_easting_osgr",
+                    "location_northing_osgr", 
+                   "lsoa_of_accident_location","urban_or_rural_area",
+                   "road_type", "first_road_class", "second_road_class", "accident_severity",
+                  "num_fatal", "num_serious", "num_slight", "weather_conditions", "road_surface_conditions",
+                   "special_conditions_at_site", "number_of_vehicles", "number_of_casualties", "speed_limit", "date", "time", "special_conditions_at_site", "light_conditions","Motorcycle", "Trucks", "Car", "Other", "Cyclist") 
+
+q1_clean <- accident_df[,df1var] 
+```
+
+For the first dataset, we selected all relevant variables for our Research Question 1, aiming to identify why certain locations were more prone to accidents through spatial analysis. We, therefore, decided to include geographical (location-specific) factors such as latitude and longitude, as well as spatial characteristics such as road types, rural vs. non-rural, road surface, and weather conditions. The number of missing values in our newly created dataset was `r sum(is.na(q1_clean))` / (`r round(sum(is.na(q1_clean)) / (nrow(q1_clean) * ncol(q1_clean)) * 100, 2)`%), and they were consequently deleted.
+
+```{r cleaning q1clean and kable, echo=FALSE}
+#| column: page-right
+# This code is cleaning out our newly created dataset for all the N/A values that we had created previously - if you are running from this point becareful- missing values in the dataset are not set as N/A!
+q1_clean <- na.omit(q1_clean)
+kable(head(q1_clean, n = 1)) # This line of code is creating a kable (interactive little table) with the head (the top examples) of our newly created dataset. 
+```
+
+##### Research Question 2 Dataset:
+
+```{r creating mini dataset 2}
+# Please refer to previous dataset creation for explination
+df2var <- c("accident_index", "accident_reference", "date", "time", "hour", "day_of_week", "accident_severity", 
+                   "number_of_vehicles", "number_of_casualties", "light_conditions", 
+                    "num_fatal", "num_serious", "num_slight",
+                   "weather_conditions", "road_surface_conditions", "special_conditions_at_site")
+q2_clean <- accident_df[, df2var]
+```
+
+In the second dataset (Research Question 2), we selected all potential relevant variables for temporal analysis, such as date, time, day of the week, and accident severity, to explore temporal patterns and trends. The number of missing values in our newly created dataset was `r sum(is.na(q2_clean))` / (`r round(sum(is.na(q2_clean)) / (nrow(q2_clean) * ncol(q2_clean)) * 100, 2)`%), and they were deleted.
+
+```{r cleaning q2clean and kable, echo=FALSE}
+#| column: page-right
+q2_clean <- na.omit(q2_clean)
+kable(head(q2_clean, n = 1))
+```
+
+##### Research Question 3 Dataset:
+
+###### Part A
+
+```{r creating mini dataset 3a}
+# Please refer to previous dataset creation for explination
+df3avar <- c("accident_index", "accident_reference", "vehicle_reference", 
+             "casualty_reference", "casualty_class", "sex_of_casualty", "age_of_casualty", 
+             "casualty_severity", "pedestrian_location", "pedestrian_movement", 
+             "car_passenger", "bus_or_coach_passenger", "pedestrian_road_maintenance_worker", 
+             "casualty_type", "casualty_home_area_type", "casualty_imd_decile", "vehicle_category")
+
+q3a_clean <- casualty_df[,df3avar]
+```
+
+In the third dataset *(Research Question 3)* 'Part A,' we selected all potential relevant variables to assist in our demographic analysis, including age, gender, and the Index of Multiple Deprivation (a measure of deprivation within the UK). The number of missing values in our newly created dataset was `r sum(is.na(q3a_clean))` / (`r round(sum(is.na(q3a_clean)) / (nrow(q3a_clean) * ncol(q3a_clean)) * 100, 2)`%), which will be deleted.
+
+```{r cleaning q3aclean and kable, echo=FALSE}
+#| column: page-right
+q3a_clean <- na.omit(q3a_clean)
+kable(head(q3a_clean, n = 1))
+```
+
+###### Part B
+
+```{r creating mini dataset 3b}
+# Please refer to previous dataset creation for explination
+df3bvar <- c("accident_index", "date", "accident_reference", "vehicle_type", 
+             "skidding_and_overturning", "vehicle_left_hand_drive",
+             "engine_capacity_cc", "propulsion_code", "age_of_vehicle", "lsoa_of_driver", "num_fatal", "num_serious", "num_slight", "sex_of_driver") 
+
+q3b_clean <- vehicle_df[,df3bvar] 
+```
+
+In the third dataset (Research Question 3) 'Part B,' we selected all relevant variables for vehicle analysis, including whether the vehicle was left-hand drive, the generic brand, age of the vehicle, etc. The number of missing values in our newly created dataset was `r sum(is.na(q3b_clean))` / (`r round(sum(is.na(q3b_clean)) / (nrow(q3b_clean) * ncol(q3b_clean)) * 100, 2)`%), and they were deleted.
+
+```{r cleaning q3bclean and kable, echo=FALSE}
+#| column: page-right
+# This is a little tricky - but this documentation should help. Our final dataset contains information across our four different vehicle types (Bicycles, Motorcycles, Cars and Trucks). The issue here is the bicycles don't share the same engine capacity, etc as cars. Therefore these columns are blank. If we were to remove N/A's from this dataset, we would be deleting cars - therefore we clean it in two separate steps. 
+cyclist_data <- q3b_clean %>% filter(vehicle_type == 1) #Filter our for cyclists
+non_cyclist_data <- q3b_clean %>% filter(vehicle_type != 1) # Filter our for non-cyclists
+non_cyclist_data_cleaned <- na.omit(non_cyclist_data) # Here we remove any N/A's in the non-cyclist data
+q3b_clean <- rbind(cyclist_data, non_cyclist_data_cleaned) # Here we put back the two minidata sets together
+kable(head(q3b_clean, n = 1)) #Here we display it's head
+```
+
+##### Research Question 4 Dataset:
+
+The fourth dataset will be created after analyzing datasets 1 to 3, enabling us to determine the most significant variables for our regression analysis.
+
+```{r r4, eval=FALSE}
+logit_data <- casualty_df %>%
+  left_join(accident_df, by = "accident_index") %>%
+  left_join(vehicle_df, by = c("accident_index", "vehicle_reference"))
+
+logit_data <- logit_data %>%
+  select(-matches("\\.x$"), -matches("\\.y$"))
+
+logit_data <- logit_data %>%
+  mutate(
+    # Convert 'date' to Date format if it's not already
+    date = ymd(date, quiet = TRUE),
+    # Create 'vehicle_category' column
+    vehicle_category = case_when(
+      vehicle_type %in% c(1) ~ "Cyclist",
+      vehicle_type %in% c(2, 3, 4, 5, 23, 97, 103, 104, 105, 106) ~ "Motorcycle",
+      vehicle_type %in% c(8, 9, 108, 109) ~ "Car",
+      vehicle_type %in% c(19, 20, 21, 98, 113) ~ "Trucks",
+      TRUE ~ "Other"
+    )
+  ) %>%
+  filter(vehicle_category %in% c("Cyclist", "Motorcycle", "Car", "Trucks")) %>%
+  filter(casualty_class %in% c(1, 2)) %>%
+  # Extract year, month, and day from date
+  mutate(
+    year = year(date),
+    month = month(date),
+    day = day(date),
+    # Extract hour from time
+    hour = as.numeric(substr(time, 1, 2))
+  ) %>%
+  select(
+    accident_index, year, month, day, hour, accident_severity, number_of_vehicles, number_of_casualties,
+    road_type, speed_limit, junction_detail, junction_control, light_conditions, propulsion_code,
+    weather_conditions, road_surface_conditions, urban_or_rural_area, vehicle_category, age_of_vehicle,
+    engine_capacity_cc, car_passenger, first_point_of_impact, vehicle_left_hand_drive, driver_imd_decile, hit_object_off_carriageway
+  )
+```
+
+```{r, eval=FALSE}
+logit_data <- na.omit(logit_data)
+kable(head(logit_data, n = 1))
+```
+
+##### Final Visual Inspection:
+
+```{r display clean datasets}
+#| column: screen-inset-right
+#| layout-nrow: 2
+plot_intro(q1_clean)
+plot_intro(q2_clean)
+plot_intro(q3a_clean)
+plot_intro(q3b_clean)
+```
+
+As you can see here, we utilized the *DataExplorer* package to implement the *plot_intro* function. This allowed us to visually inspect our datasets to ensure that they were clean prior to proceeding with the data wrangling phase of our project. As you can see in the tables above, all four of our datasets, have 0% missing columns nor missing observations. We can therefore move forward to the next step.
+
+### 2.3.5 Feature Engineering
+
+To improve the clarity and interpretability of our dataset, we engaged in a process of feature transformation. This involved converting various numerical variables into categorical variables, a technique often referred to as categorical encoding. This method is distinct from 'one-hot encoding,' which is a specific approach used mainly in preparing data for machine learning models. In our case, the transformation primarily entailed assigning descriptive labels to numerical codes, thereby enhancing the readability and comprehension of the data.
+
+This transformation is particularly beneficial for visual data analysis and interpretation. It allowed us to represent data elements like days of the week, accident severity, and time ranges with meaningful labels instead of mere numerical codes. On top of this, given the large number of encoded values in our data sets, such as vehicle types or road types, this was extremely important as it would be impossible for the reader to be able to comprehend without adding this level of granularity. This made graphs more intuitive and data tables easier to understand, eliminating the need for additional labeling or explanations in our visual representations.
+
+![](images/Feature%20Engineering.png){fig-align="center" width="890"}
+
+```{r feature engineering and reclassification of datasets}
+# This code is adding day names to day_of_week - replacing the 1,2,3,etc (this is called a FACTOR)
+q2_clean$day_name <- factor(q2_clean$day_of_week, 
+                            levels = c(1, 2, 3, 4, 5, 6, 7),
+                            labels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"))
+# Here we are chaing the format of the date
+q2_clean$month_name <- format(as.Date(q2_clean$date), "%B")
+
+# This code is adding day names to the month
+q2_clean$month_name <- factor(q2_clean$month_name, # Setting it as a factor - ergo in order for our future graphs
+                              levels = c("January", "February", "March", "April", "May", "June", 
+                                         "July", "August", "September", "October", "November", "December"))
+
+# Here we are doing the same for the severity level - 1 is fatal, 3 is slight, etc
+q2_clean$accident_severity_chr <- factor(q2_clean$accident_severity, 
+                                     levels = c(1, 2, 3),
+                                       labels = c("Fatal", "Serious", "Slight"))
+
+# This nifty code is looking at the hour column, it's then taking it and creasing a column with the corresponding time range. This is very important for when we are going to analyse the time 
+q2_clean <- q2_clean %>%
+  mutate(
+    time_ranges = case_when(
+      hour >= 0 & hour < 6  ~ "0-6 AM", # When the hour is bigger than or equal to 0 and smaller than 6AM
+      hour >= 6 & hour < 12 ~ "6-12 AM",
+      hour >= 12 & hour < 18 ~ "12-6 PM",
+      hour >= 18 ~ "6-12 PM"
+    ),
+    time_ranges = factor(time_ranges, levels = c("0-6 AM", "6-12 AM", "12-6 PM", "6-12 PM")) # This then puts them in a factor - or in other words reorders them. This ensures that when we run any statistical tests, or regressions, the outputs will come out in THIS order. Which makes interpreting ALOT easier. Make sure you do this. 
+  )
+
+# This creates a column named casualty_class_chr which is showing the corresponding casualty reference but in a character - i.e. was the individual a passenger, or driver. 
+q3a_clean$casualty_class_chr <- factor(q3a_clean$casualty_reference,
+                                       levels = c(1,2,3),
+                                       labels = c("Driver/Rider", "Passenger", "Pedestrian"))
+
+# Here we are doing the same for the severity level - 1 is fatal, 3 is slight, etc
+q3a_clean$casualty_severity_chr <- factor(q3a_clean$casualty_severity,
+                                          levels = c(3,2,1),
+                                          labels = c("Light", "Serious", "Fatal"))
+
+# This creates a column named sex_chr which is showing the corresponding casualty sex based ont he value in sex_of_casualty column
+q3a_clean$sex_chr <- factor(q3a_clean$sex_of_casualty,
+                            levels = c(1,2),
+                            labels = c("Male", "Female"))
+
+#This is for when we create the age groups - this are the bins that we will be using (0 - 18, 18 - 25, etc)
+age_bins <- c(0, 18, 25, 35, 50, 65, Inf)
+
+# Define age group labels
+age_labels <- c("Young (0-18)", "Young Adult (19-25)", "Adult (26-35)", "Middle-Aged (36-50)", "Senior (51-65)", "Old (66+)")
+
+# Creating the "age groups" column
+q3a_clean$age_groups <- cut(q3a_clean$age_of_casualty, breaks = age_bins, labels = age_labels, include.lowest = TRUE)
+
+# Convert "age_groups" to a factor with custom labels
+q3a_clean$age_groups <- factor(q3a_clean$age_groups, levels = age_labels)
+
+#This is creating a column named casualty_type_chr which has the corresponding casualty type based on it's encoding from the casualty_type column --> refer to legend for the explination of all of these codes and their meanings
+q3a_clean$casualty_type_chr <- factor(q3a_clean$casualty_type,
+                            levels = c(0,1,2,3,4,5,8,9,10,11,16,17,18,19,20,21,22,
+                                       23,90,97,98,99),
+                            labels = c("Pedestrian", "Cyclist", "Moto [50cc]", "Moto [125cc]",
+                                       "Moto [125/500cc]", "Moto [+500cc]", "Taxi/Private Car",
+                                       "Car", "Minibus", "Bus/Coach", "Horse Rider", 
+                                       "Agri", "Tram", "Van/Goods [<3.5ton]",
+                                       "Van/Goods [3.5/7.5tons]", "Van/Goods [>7.5ton]",
+                                       "Mobility Scooter", "Electric Moto", "Other Vehicle",
+                                       "Moto [unk CC]", "Van/Goods [unk ton]", "Unknown"))
+
+# Here we are doing as we did previously, which is creating a vehicle category based on the corresponding vehicle type code (This was done for the datasets previously and might be redundant - please check and use accordingly)
+q3b_clean <- q3b_clean %>%
+  mutate(vehicle_category = case_when(
+    vehicle_type %in% c(1) ~ "Cyclist",
+    vehicle_type %in% c(2, 3, 4, 5, 23, 97, 103, 104, 105, 106) ~ "Motorcycle",
+    vehicle_type %in% c(8, 9, 108, 109) ~ "Car",
+    vehicle_type %in% c(19, 20, 21, 98, 113) ~ "Trucks",
+    TRUE ~ "Other"  # For vehicle types that don't fall into these categories
+  ))
+
+# Here we are adding a column to our 3b dataset which is the month, based on the date column in the dataset. 
+q3b_clean$month <- month(as.Date(q3b_clean$date, format = "%d/%m/%Y"))
+
+# Here we are encoding the vehcile type in character from the vehicle type encoded column -> please refer to the legend for the meanings - as this might change in the future if using a new dataset. 
+q3b_clean <- q3b_clean %>%
+  mutate(
+    vehicle_type_chr = case_when(
+      vehicle_type ==  1 ~ "Pedal cycle",
+      vehicle_type ==  2 ~ "Motorcycle 50cc and under",
+      vehicle_type ==  3 ~ "Motorcycle 125cc and under",
+      vehicle_type ==  4 ~ "Motorcycle over 125cc and up to 500cc",
+      vehicle_type ==  5 ~ "Motorcycle over 500cc",
+      vehicle_type ==  8 ~ "Taxi/Private hire car",
+      vehicle_type ==  9 ~ "Car",
+      vehicle_type == 10 ~ "Minibus (8 - 16 passenger seats)",
+      vehicle_type == 11 ~ "Bus or coach (17 or more pass seats)",
+      vehicle_type == 16 ~ "Ridden horse",
+      vehicle_type == 17 ~ "Agricultural vehicle",
+      vehicle_type == 18 ~ "Tram",
+      vehicle_type == 19 ~ "Van / Goods 3.5 tonnes mgw or under",
+      vehicle_type == 20 ~ "Goods over 3.5t. and under 7.5t",
+      vehicle_type == 21 ~ "Goods 7.5 tonnes mgw and over",
+      vehicle_type == 22 ~ "Mobility scooter",
+      vehicle_type == 23 ~ "Electric motorcycle",
+      vehicle_type == 90 ~ "Other vehicle",
+      vehicle_type == 97 ~ "Motorcycle - unknown cc",
+      vehicle_type == 98 ~ "Goods vehicle - unknown weight",
+      vehicle_type == 99 ~ "Unknown vehicle type (self rep only)",
+      vehicle_type == 103 ~ "Motorcycle - Scooter (1979-1998)",
+      vehicle_type == 104 ~ "Motorcycle (1979-1998)",
+      vehicle_type == 105 ~ "Motorcycle - Combination (1979-1998)",
+      vehicle_type == 106 ~ "Motorcycle over 125cc (1999-2004)",
+      vehicle_type == 108 ~ "Taxi (excluding private hire cars) (1979-2004)",
+      vehicle_type == 109 ~ "Car (including private hire cars) (1979-2004)",
+      vehicle_type == 110 ~ "Minibus/Motor caravan (1979-1998)",
+      vehicle_type == 113 ~ "Goods over 3.5 tonnes (1979-1998)",
+      vehicle_type == -1 ~ "Data missing or out of range",
+      TRUE ~ NA_character_  # Default case
+    )
+  )
+# Here we are factoring the car passenger and adding characters from the code. 
+q3a_clean$car_passenger_chr <- factor(q3a_clean$car_passenger,
+                            levels = c(0, 1, 2, 9, -1),
+                            labels = c("Not car passenger", "Front seat passenger", "Rear seat passenger",
+                                       "unknown", "missing"))
+```
+
+### 2.3.6 Transformation of LSOA to UTLA:
+
+Upon exploring our data set, we noticed the presence of a column containing LSOA (Lower Layer Super Output Areas), a geographic hierarchy designed to enhance the reporting of small area statistics in the UK and Wales, assigned to each accident . However, given the fact that they were **33,755** different LSOA's present in the UK in 2021, attempting to visualize and analyze such a multitude of regions would have proven exceedingly challenging. Therefore, we decided to aggregate these LSOA's at the UTLA level (Upper Tier Local Authorities) encompassing larger regions (217 regions) compared to LSOAs, to facilitate the derivation of more generalized insights.
+
+![](images/LSOA_UTLA.gif){.column-margin}
+
+Unfortunately, our dataset lacked information regarding UTLAs, requiring us to import a conversion dataset containing the corresponding UTLA codes for each LSOA (ONS Geography Office for National Statistics, 2020). We joined the information from this dataset to our primary spatial dataset and added a column representing the corresponding UTLA code and name. This step proved extremely difficult, given that the UK changes the coding for both LSOA's and UTLA's regularly. After multiple weeks of debugging, and conducting thorough research, we discovered that the dataset we used was from 2011 -- 2017, and UTLA codes had changed in 2019. To address this discrepancy, we utilized a more recent dataset to align with our 2022 data. Once this issue was rectified, we were able to subsequently import a GeoJSON file containing the spatial boundaries of each of our UTLA's for visual exploration and analysis (DLUCH GIS Team Ministry of Housing, Communities and Local Government, 2019).
+
+```{r saving datatreated datasets, echo=FALSE}
+# Here we are saving all of our newly created datasets - so that we can access them and use them from a different R report. 
+q1_data_path <- here::here("data", "q1_clean.rds")
+q2_data_path <- here::here("data", "q2_clean.rds")
+q3a_data_path <- here::here("data", "q3a_clean.rds")
+q3b_data_path <- here::here("data", "q3b_clean.rds")
+logit_data_path <- here::here("data", "logit_data.rds")
+saveRDS(q1_clean, q1_data_path)
+saveRDS(q2_clean, q2_data_path)
+saveRDS(q3a_clean, q3a_data_path)
+saveRDS(q3b_clean, q3b_data_path)
+#saveRDS(logit_data, logit_data_path)
+```

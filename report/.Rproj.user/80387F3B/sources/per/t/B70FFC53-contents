@@ -1,0 +1,10 @@
+```{r}
+source(here::here("src/setup.R"))
+```
+
+
+# Introduction
+
+* Overview and Motivation
+* Related Work
+* Research questions

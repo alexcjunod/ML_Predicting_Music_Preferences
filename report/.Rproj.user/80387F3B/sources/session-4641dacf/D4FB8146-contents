@@ -1,0 +1,150 @@
+```{r, message=FALSE, echo=FALSE}
+source(here::here("src/setup.R"))
+df_clean <- here::here("data", "df_clean")
+df_clean <- read_csv(df_clean)
+```
+
+# Exploratory data analysis
+
+##Mapping out the underlying structure
+
+##Identifying the most important variables
+
+##Simplification through PCA
+
+```{r PCA, echo=FALSE}
+df_numeric <- df_clean %>%
+  select(8:ncol(df_clean)) %>%
+  mutate(across(where(is.numeric), scale))  # Scale numeric columns
+
+# Run PCA
+df_pca <- PCA(df_numeric, graph = FALSE)
+
+# Print PCA results
+print(df_pca)
+
+# Visualizing PCA: Scree plot to see the variance explained by each principal component
+fviz_eig(df_pca, addlabels = TRUE, ncp = 11)  # You might adjust 'ncp' based on your specific needs
+fviz_pca_var(df_pca)
+
+# Visualizing PCA: Biplot to see loadings and scores
+fviz_pca_biplot(df_pca)
+# Visualize variable contributions to the principal components
+fviz_contrib(df_pca, choice = "var", axes = 1)  # For PC1 contributions, change 'axes' for other PCs
+```
+##Univariate visualizations
+
+###Comparing liked/disliked songs' characteristics distributions
+
+```{r, eval=FALSE}
+# Switching 'Liked' column to factor for easy visualization
+df_clean$Liked <- factor(df_clean$Liked, labels = c("Disliked", "Liked"))
+
+# Columns to compare
+columns_to_compare <- c('Energy', 'Danceability', 'Duration', 'Instrumentalness', 
+                        'Liveness', 'Acousticness', 'Speechiness', 'Tempo', 
+                        'TrackPopularity', 'Valence')
+
+# Building density plots for every column
+for (col in columns_to_compare) {
+  plot <- ggplot(df_clean, aes(x = .data[[col]], fill = Liked)) +
+    geom_density(alpha = 0.5) +
+    labs(title = paste("Comparing", col, "between liked & disliked songs"),
+         x = col, y = "Density") +
+    theme_minimal() +
+    scale_fill_manual(values = c("orange", "lightblue"))
+  
+  print(plot)
+}
+```
+
+```{r univariate single graphs}
+# Identify numeric columns in the dataframe
+numeric_columns <- names(df_clean)[sapply(df_clean, is.numeric)]
+
+# Generate plots for each numeric variable
+for (col in numeric_columns) {
+  # Skip plotting the 'Liked' column itself
+  if (col != "Liked") {
+    # Combined Histogram and Density Plot
+    plot <- ggplot(df_clean, aes_string(x = col, fill = "factor(Liked)")) +
+      geom_histogram(aes(y = after_stat(density)), fill = "grey", color = "black", bins = 30) +  # Histogram for overall distribution
+      geom_density(alpha = 0.5, aes(color = factor(Liked), fill = factor(Liked))) +  # Density plots with color
+      labs(title = paste("Distribution and Comparison of", col, "by Liked Status"),
+           x = col, y = "Density") +
+      theme_minimal() +
+      scale_fill_manual(values = c("orange", "lightblue")) +  # Colors for the fill of density plot
+      scale_color_manual(values = c("orange", "lightblue")) +  # Colors for the density lines
+      guides(fill=guide_legend(title="Liked Status"), color=guide_legend(title="Liked Status"))  # Adjust the legend for clarity
+    
+    # Print the plot
+    print(plot)
+  }
+}
+
+```
+
+```{r, eval=FALSE}
+library(ggplot2)
+library(patchwork)
+
+# Identify numeric columns in the dataframe
+numeric_columns <- names(df_clean)[sapply(df_clean, is.numeric)]
+
+# Initialize an empty plot object to start with
+combined_plot <- NULL
+
+# Generate plots for each numeric variable
+for (col in numeric_columns) {
+  if (col != "Liked") {  # Skip plotting the 'Liked' column itself
+    plot <- ggplot(df_clean, aes_string(x = col, fill = "factor(Liked)")) +
+      geom_histogram(aes(y = after_stat(density)), fill = "grey", color = "black", bins = 30) +
+      geom_density(alpha = 0.5, aes(color = factor(Liked), fill = factor(Liked))) +
+      labs(title = paste("Distribution and Comparison of", col, "by Liked Status"),
+           x = col, y = "Density") +
+      theme_minimal() +
+      scale_fill_manual(values = c("orange", "lightblue")) +
+      scale_color_manual(values = c("orange", "lightblue")) +
+      guides(fill=guide_legend(title="Liked Status"), color=guide_legend(title="Liked Status"))
+
+    # Combine using the `patchwork` syntax
+    if (is.null(combined_plot)) {
+      combined_plot <- plot
+    } else {
+      combined_plot <- combined_plot + plot
+    }
+  }
+}
+
+# Automatically arrange all plots
+combined_plot + plot_layout(ncol = 3)  # Set the number of columns as desired
+
+
+
+```
+
+Looking at the distributions of each feature, there are clear distinctions between my Liked and Disliked songs, especially in the ENERGY, TEMP, DURATION, and LIVENESS features.
+
+ENERGY: Preference for a bit less energic songs TEMPO: Preference for songs between 100 & 120 bpm or around 160 (House/rap & techno?) DURATION: (to clean) Preference for songs that are a bit longer LIVENESS: Idk how to understand the value but clear preference for a low value of liveness
+
+=\> We also could present this on a spider plot but I think that isolating each criterion can be relevant if we want to present
+
+##Multivariate visualizations
+
+```{r}
+# Assuming 'df_clean' is your data frame and 'Liked' is included as a numeric column
+cor_matrix <- cor(df_clean[sapply(df_clean, is.numeric)])  # Compute correlation matrix for numeric columns
+corrplot(cor_matrix, method = "color", order = "hclust", 
+         tl.col = "black", tl.srt = 45)  # Text label color and rotation
+```
+
+###Summary tables
+
+```{r}
+summary(df_clean)
+```
+
+```{r saving clean dataset}
+df_clean_path <- here::here("data", "df_clean")
+write.csv(df_clean, df_clean_path, row.names = FALSE)
+```

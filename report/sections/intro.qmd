@@ -1,0 +1,33 @@
+```{r, echo=FALSE, message=FALSE}
+source(here::here("src/setup.R"))
+```
+
+# Honor Pledge
+
+This project was written by us and in our own words, except for quotations from published and unpublished sources, which are clearly indicated and acknowledged as such. We are conscious that the incorporation of material from other works or a paraphrase of such material without acknowledgement will be treated as plagiarism, subject to the custom and usage of the subject, according to the University Regulations. The source of any picture, map or other illustration is also indicated, as is the source, published or unpublished, of any material not resulting from our own research.
+
+![Camille and Alex's Signature](`r here::here("image", "camalexsig.png")`){width=25%}
+![Arthur's Signature](`r here::here("image", "arthursig.jpeg")`){width=25%}
+![](`r here::here("image", "Logo_HEC_Lausanne.png")`){width=50%}
+
+# Introduction
+
+## Context and Background
+
+In the digital age, music streaming platforms such as Spotify and Apple Music have revolutionized how people access and enjoy music, offering personalized listening experiences and access to a vast array of new songs and genres. Spotify, which commands 31.4% of the global digital music streaming market with 1.68 billion users (Spotify User Stats, Updated March 2024), provides developers and analysts with extensive access to its data through its web API. This wealth of data made Spotify an ideal resource for our machine learning project "Skip or Replay? Predicting Song Preferences on Spotify Using Machine Learning", allowing us to explore various analytical methods, aligning with the objectives of our Machine Learning in Business Analytics course at the Université de Lausanne - Faculty of Business and Economics (HEC).
+
+## Project Goal (Research Question)
+
+The primary goal of this exercise was to develop predictive machine learning models that can accurately predict whether we will like or dislike a song, purely based on its audio characteristics and metadata. Therefore, our research question can best be defined as the following: *"How can we utilize machine learning models and techniques to predict our personal preference for a song based on its audio characteristics and metadata, and what are the key features that determine whether a song will be liked or disliked by us?"*
+
+## Description of the Data
+
+The data used for this project was sourced directly from Spotify's Web API. Each member of our team compiled two playlists—one with liked songs and the other with disliked songs. After a subjective review, we chose to use the playlists created by our teammate Camille, as the tracks in her playlists exhibited more distinct patterns compared to others within our group (i.e., the difference between her Liked and Disliked songs appeared more distinct). We then gathered a comprehensive collection of attributes for the tracks of each playlist into a single dataset. This dataset included both audio properties, such as Tempo, Energy, and Danceability, and metadata like Artist Popularity and Genre. Initially received in JSON format, the data was converted into CSV files to facilitate the processing. These foundational features were crucial for modeling and uncovering underlying preferences towards different musical elements.
+
+## Methodology
+
+In this machine learning project, we utilized a comprehensive model-based machine learning approach to quantify and predict preferences for Spotify tracks. To achieve this, we deployed a collection of machine learning models, each capable of analyzing song features to determine the likelihood of a user liking or disliking a song. The primary models employed included Logistic Regression, Classification Trees, Support Vector Machines (SVM), and Random Forests. Each model was initially tested in its baseline form (i.e., no tuning of hyperparameters) to assess its basic performance in predicting user preferences based on predefined metrics (Balanced Accuarcy, Kappa, Precision, Recall and AUC). We believe that this approach was best given two reasons: firstly, this provided us a unique opportunity to implement as much of the MLBA class learnings as possible in our report, secondly, we also knew that "no one model works best for all possible situations" (Brownlee, 2021). Then by comparing the quality of these baseline models on a defined validation set, we identified the models that best captured the nuances of musical preference (i.e., which were performing the best prior to any tuning). Following the initial evaluation on our validation set, we further refined our approach by selecting the two models for further hyperparameter tuning. This tuning process was designed to optimize the models' predictive power by adjusting various hyperparameters in an attempt to increase its predictive quality further than its baseline results. This methodical enhancement helped in sharpening the accuracy and reliability of our predictive analytics, ensuring that the final models would generalize to unseen data in the highest quality possible. This dual-phase approach---initial broad comparison followed by focused optimization---ensured that our final predictive models were both robust and finely tuned to the specifics of individual user preferences in music. In addition, this offered our team the learning opportunity to code, implement and interpret more than two models in this project.
+
+See the figure below for a visual representation of the steps taken in our project's methodology.
+
+![Our methodology explained - Inspired by (Basavaraju et al., 2019)](`r here::here("image", "Methodology.png")`)

@@ -1,0 +1,4 @@
+"0","# Calculate the age in days from Release Date to today"
+"0","df$AgeInDays <- as.integer(Sys.Date() - df$AlbumReleaseDate)"
+"0","# View the first few entries in the new AgeInDays column to confirm"
+"0","head(df[c(""AlbumReleaseDate"", ""AgeInDays"")])"

@@ -1,0 +1,3 @@
+"0","df$Duration <- df$Duration_ms / 1000"
+"0","df$Duration_ms <- NULL  # This will delete the 'Duration_ms' column"
+"0","head(df)"

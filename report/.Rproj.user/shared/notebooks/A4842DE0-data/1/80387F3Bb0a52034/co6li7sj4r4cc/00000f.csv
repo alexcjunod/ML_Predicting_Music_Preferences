@@ -1,0 +1,1 @@
+"0","head(df) # Get the first few instances of the dataset that we are working with, we can already see that we are going to drop the Tract URI (it's the link) and the Artist URI"

@@ -1,0 +1,444 @@
+---
+editor: 
+  markdown: 
+    wrap: 72
+---
+
+# Conclusion
+
+In conclusion, our project, "Skip or Replay? Predicting Song Preferences
+on Spotify Using Machine Learning," successfully leveraged the rich
+dataset provided by Spotify's API to construct predictive models that
+discern listener preferences effectively. Using Logistic Regression and
+Random Forest models, we uncovered key insights into how different audio
+features influenced song likability. The models demonstrated a
+significant reliance on features such as Valence, Explicitness,
+GenreCount, and WordCount, which were found to be pivotal in determining
+Camille's preferences.
+
+Our analysis, supported by tools like the DALEX package and Partial
+Dependence Plots, provided a nuanced understanding of feature influence.
+We observed that Logistic Regression was particularly sensitive to
+changes in features like Explicitness and Valence, showing a clear trend
+where higher Valence and lower Explicitness increased a song's
+likability. On the other hand, the Random Forest model exhibited
+robustness, maintaining consistent predictions across varying levels of
+these features, which suggests its superiority in handling non-linear
+interactions and complex feature relationships.
+
+Furthermore, the exploration of temporal features such as song age
+showed that older songs generally gained higher likability scores,
+indicating a potential nostalgic influence on listener preferences.
+These insights not only enhance our understanding of the complexities of
+musical taste but also underscore the capability of machine learning to
+tackle intricate real-world problems. This project has not only provided
+a practical application of advanced machine learning techniques but also
+highlighted the critical role of data science in extracting meaningful
+insights from large-scale data, reinforcing its value in business
+analytics and decision-making processes today.
+
+## Limitations
+
+Some limitations of this machine learning project include the size and
+composition of the dataset. We utilized a dataset comprising 200 liked
+and 200 disliked songs, a scope that, while functional, might be
+insufficient for fully capturing the breadth of factors that influence
+musical preferences. This limitation is particularly evident in the
+absence of certain musical genres, such as classical music, from the
+dataset. Consequently, our models were not trained on these genres,
+potentially compromising the generalizability of our findings across
+diverse musical styles. Future work could include creating a "genre"
+framework that could cover as many musical styles as possible allowing
+one to create a more diverse framework and allow for more generalizable
+models.
+
+Moreover, it's worth noting that while identifying liked songs tends to
+be straightforward, discovering disliked songs poses a more significant
+challenge, as these are generally not listened to. This difference can
+introduce issues in how song genres are represented within disliked
+playlists, potentially leading to biases in the data. For instance,
+achieving a balanced representation of both liked and disliked songs
+from the same genres could have enhanced the robustness of our model by
+providing a more equitable basis for comparison and analysis. Ensuring
+such balance is crucial for reducing bias and improving the accuracy of
+predictions about disliked songs.\
+\
+Predicting song preferences is also inherently challenging due to the
+subjective nature of musical taste, which can vary significantly based
+on situational contexts such as the listener's mood or environment.
+These factors underscore the difficulties in achieving precise
+predictions and highlight the need for cautious interpretation of the
+results when applying the developed predictive models beyond the
+specific dataset used in this study.\
+\
+Finally, the models were specifically designed and tuned to predict the
+musical preferences of a single individual, Camille from our team. This
+customization involved selecting and tuning hyperparameters to optimize
+performance based on her unique taste profile (i.e., datasets), which
+featured clearly distinguishable preferences across certain musical
+genres. While this approach yielded favorable results within the scope
+of our project, it poses significant limitations for the external
+generalization of our models and findings. The models were tailored to
+the nuances of Camille's musical preferences and may not perform
+effectively for another listener with different tastes or a more
+eclectic genre preference. For instance, if another user has a less
+defined or more varied musical taste than Camille, the predictive
+accuracy of our models could diminish significantly. This limitation
+highlights the challenge in creating universally applicable models in
+music preference prediction, underscoring the importance of considering
+individual differences when applying these machine learning techniques
+in broader, more diverse contexts.
+
+## References
+
+-   1.10. Decision Trees. (n.d.). In Scikit-learn. Retrieved 19 May
+    2024, from https://scikit-learn/stable/modules/tree.html
+
+-   3.1. Cross-validation: Evaluating estimator
+    performance---Scikit-learn 1.4.2 documentation. (n.d.). Retrieved 17
+    May 2024, from
+    https://scikit-learn.org/stable/modules/cross_validation.html
+
+-   \(18\) A Nice Beheading for Mom---YouTube. (n.d.). Retrieved 13 May
+    2024, from
+    https://www.youtube.com/watch?v=DuAT2kW4eQo&ab_channel=MonumentofMisanthropy-Topic
+
+-   \(18\) Artemas---I like the way you kiss me (official music
+    video)---YouTube. (n.d.). Retrieved 13 May 2024, from
+    https://www.youtube.com/
+
+-   \(18\) Bakar---Hell N Back (Official Video)---YouTube. (n.d.).
+    Retrieved 13 May 2024, from
+    https://www.youtube.com/watch?v=BdrNvQ4YCng&ab_channel=BakarVEVO
+
+-   \(18\) Billie Holiday---"Strange Fruit" Live 1959 \[Reelin' In The
+    Years Archives\]---YouTube. (n.d.). Retrieved 13 May 2024, from
+    https://www.youtube.com/watch?v=-DGY9HvChXk&ab_channel=ReelinInTheYears66
+
+-   \(18\) Djadja & Dinaz---J'fais mes affaires \[Clip
+    Officiel\]---YouTube. (n.d.). Retrieved 13 May 2024, from
+    https://www.youtube.com/watch?v=v2o3in-Aud0&ab_channel=Djadja%26Dinaz
+
+-   \(18\) Eminem---Not Afraid (Lyrics)---YouTube. (n.d.). Retrieved 13
+    May 2024, from
+    https://www.youtube.com/watch?v=anUz77ElBK4&ab_channel=RapCity
+
+-   \(18\) Joni Mitchell---Big Yellow Taxi (Official Lyric
+    Video)---YouTube. (n.d.). Retrieved 13 May 2024, from
+    https://www.youtube.com/watch?v=2595abcvh2M&ab_channel=JoniMitchell
+
+-   Achy Breaky Heart---Wikipedia. (n.d.). Retrieved 8 May 2024, from
+    https://en.wikipedia.org/wiki/Achy_Breaky_Heart
+
+-   Agrawal, S. (2020). What is Hyperparameter Tuning (Cross-Validation
+    and Holdout Validation) and Model Selection. In Medium.
+    https://medium.com/@sanidhyaagrawal08/what-is-hyperparameter-tuning-cross-validation-and-holdout-validation-and-model-selection-a818d225998d
+
+-   ajaymehta. (2023). Detecting and Preventing Data Leakage in Machine
+    Learning: In Medium.
+    https://medium.com/@dancerworld60/detecting-and-preventing-data-leakage-in-machine-learning-4bb910900ab7
+
+-   Arjmand, H.-A., Hohagen, J., Paton, B., & Rickard, N. S. (2017).
+    Emotional Responses to Music: Shifts in Frontal Brain Asymmetry Mark
+    Periods of Musical Change. Frontiers in Psychology, 8.
+    https://doi.org/10.3389/fpsyg.2017.02044
+
+-   Bakar---Hell N Back (Lyrics) ft. Summer Walker---YouTube. (n.d.).
+    Retrieved 13 May 2024, from
+    https://www.youtube.com/watch?v=ArOX0wJP3Y8&ab_channel=VibeMusic
+    Bakar---Hell N Back (Official Video). (n.d.). Retrieved 13 May 2024,
+    from https://www.youtube.com/watch?v=BdrNvQ4YCng
+
+-   Bayesian Hyperparameter Optimization: Basics & Quick Tutorial.
+    (n.d.). Retrieved 12 May 2024, from
+    https://www.run.ai/guides/hyperparameter-tuning/bayesian-hyperparameter-optimization
+
+-   Basavaraju, A., Du, J., Zhou, F., & Ji, J. (2019). A Machine
+    Learning Approach to Road Surface Anomaly Assessment Using
+    Smartphone Sensors. *IEEE Sensors Journal*, *PP*, 1--1.
+    <https://doi.org/10.1109/JSEN.2019.2952857>
+
+-   BHADAURIYA, R. (2021). Lasso ,Ridge & Elastic Net Regression: A
+    Complete Understanding (2021). In Medium.
+    https://medium.com/@creatrohit9/lasso-ridge-elastic-net-regression-a-complete-understanding-2021-b335d9e8ca3
+
+-   Bobbitt, Z. (2021). Cohen's Kappa Statistic: Definition & Example.
+    In Statology. https://www.statology.org/cohens-kappa-statistic/
+
+-   Brownlee, J. (2021). No Free Lunch Theorem for Machine Learning. In
+    MachineLearningMastery.com.
+    https://machinelearningmastery.com/no-free-lunch-theorem-for-machine-learning/
+
+-   cck3. (2022). Best practice for encoding datetime in machine
+    learning. In Cross Validated.
+    https://stats.stackexchange.com/q/311494
+
+-   Chen, L. (2019). Support Vector Machine---Simply Explained. In
+    Medium.
+    https://towardsdatascience.com/support-vector-machine-simply-explained-fee28eba5496
+
+-   Choosing a Model for Binary Classification Problem \textbar by
+    Andrii Gozhulovskyi \textbar Medium. (n.d.). Retrieved 17 May 2024,
+    from
+    https://medium.com/@andrii.gozhulovskyi/choosing-a-model-for-binary-classification-problem-f211f7a4e263
+
+-   Classifying genres in R using Spotify data. (2019). In Kaylin
+    Pavlik. https://www.kaylinpavlik.com/classifying-songs-genres/
+
+-   Cowboy Casanova. (2024). In Wikipedia.
+    https://en.wikipedia.org/w/index.php?title=Cowboy_Casanova&oldid=1216997399
+
+-   Dalpiaz, D. (n.d.). Chapter 10 Logistic Regression \textbar R for
+    Statistical Learning. Retrieved 19 May 2024, from
+    http://daviddalpiaz.github.io/r4sl/
+
+-   Data Leakage and its effect on Machine Learning models \textbar by
+    Swetha \textbar Medium. (n.d.). Retrieved 19 May 2024, from
+    https://medium.com/@swethac42/data-leakage-and-its-effect-on-machine-learning-models-67c8edc588d4
+
+-   Data science---K-Fold Cross-Validation How Many Folds? - Stack
+    Overflow. (n.d.). Retrieved 17 May 2024, from
+    https://stackoverflow.com/questions/51455186/k-fold-cross-validation-how-many-folds
+
+-   DEI, M. (2019). Three Model Explanability Methods Every Data
+    Scientist Should Know. In Medium.
+    https://towardsdatascience.com/three-model-explanability-methods-every-data-scientist-should-know-c332bdfd8df
+
+-   Dey, R. (2023). Understanding Principal Component Analysis (PCA). In
+    Medium.
+    https://medium.com/@roshmitadey/understanding-principal-component-analysis-pca-d4bb40e12d33
+
+-   DiFrancesco, V. (2021). A Guide to Picking the Appropriate Scoring
+    Metric for Your Machine Learning Classifier. In The Startup.
+    https://medium.com/swlh/a-guide-to-picking-the-appropriate-scoring-metric-for-your-machine-learning-classifier-8e7bce9c6ae8
+
+-   Does it matter? (n.d.). Retrieved 17 May 2024, from
+    https://cran.r-project.org/web/packages/cvms/vignettes/picking_the_number_of_folds_for_cross-validation.html
+
+-   Eby, M. (2019). Hyperparameters. In Analytics Vidhya.
+    https://medium.com/analytics-vidhya/hyperparameters-80cb4f442e5
+
+-   Elitsa Kaloyanova. (n.d.). What Is Principal Components Analysis?
+    \textbar 365 Data Science. Retrieved 17 May 2024, from
+    https://365datascience.com/tutorials/python-tutorials/principal-components-analysis/
+
+-   ES, S. (2022). 7 Cross-Validation Mistakes That Can Cost You a Lot
+    \[Best Practices in ML\]. In Neptune.ai.
+    https://neptune.ai/blog/cross-validation-mistakes
+
+-   Evaluating Model Performance: A Comprehensive Guide \textbar by
+    Zhong Hong \textbar Medium. (n.d.). Retrieved 10 May 2024, from
+    https://medium.com/@zhonghong9998/evaluating-model-performance-a-comprehensive-guide-6f5e7c11409f
+
+-   Faculty of Business and Economics (HEC Lausanne). (n.d.). Retrieved
+    6 May 2024, from https://www.unil.ch/hec/en/home.html
+
+-   Fast Eddie---Yo Yo Get Funky. (1988).
+    https://www.discogs.com/release/2750-Fast-Eddie-Yo-Yo-Get-Funky
+
+-   GitHub---Spotipy-dev/spotipy: A light weight Python library for the
+    Spotify Web API. (n.d.). Retrieved 6 May 2024, from
+    https://github.com/spotipy-dev/spotipy
+
+-   Grace (Jeff Buckley album)---Wikipedia. (n.d.). Retrieved 8 May
+    2024, from https://en.wikipedia.org/wiki/Grace\_(Jeff_Buckley_album)
+
+-   GridTest. (n.d.). In Gridtest. Retrieved 8 May 2024, from
+    https://vsoch.github.io/gridtest/gridtest/\
+    Gupta, M. (2024). Understanding Partial Dependence Plots (PDPs). In
+    Data Science in your pocket.
+    https://medium.com/data-science-in-your-pocket/understanding-partial-dependence-plots-pdps-415346b7e7f1
+
+-   Gusarova, M. (2023). Logistic Regression Model Tuning (Python Code).
+    In Medium.
+    https://medium.com/@data.science.enthusiast/logistic-regression-tune-hyperparameters-python-code-fintech-does-it-bring-any-value-619e172565e6
+
+-   Halo (Beyoncé song). (2024). In Wikipedia.
+    https://en.wikipedia.org/w/index.php?title=Halo\_(Beyonc%C3%A9_song)&oldid=1222787762
+
+-   herhuf. (2017). ROC curve for different hyperparameters of
+    `RandomForestClassifier`? In Data Science Stack Exchange.
+    https://datascience.stackexchange.com/q/23637
+
+-   Hong, Z. (2023). Evaluating Model Performance: A Comprehensive
+    Guide. In Medium.
+    https://medium.com/@zhonghong9998/evaluating-model-performance-a-comprehensive-guide-6f5e7c11409f
+
+-   How to create New Features using Clustering‼ \textbar by Gowtham
+    Dongari \textbar Towards Data Science. (n.d.). Retrieved 8 May 2024,
+    from
+    https://towardsdatascience.com/how-to-create-new-features-using-clustering-4ae772387290
+
+-   Hsu, C.-W., Chang, C.-C., & Lin, C.-J. (n.d.). A Practical Guide to
+    Support Vector Classiﬁcation.
+
+-   Hyperparameter tuning. (2019). In GeeksforGeeks.
+    https://www.geeksforgeeks.org/hyperparameter-tuning/
+
+-   Hyperparameter tuning overview \textbar BigQuery. (n.d.). In Google
+    Cloud. Retrieved 18 May 2024, from
+    https://cloud.google.com/bigquery/docs/hp-tuning-overview
+
+-   Igareta, A. (2021). Stratified Sampling: You May Have Been Splitting
+    Your Dataset All Wrong. In Medium.
+    https://towardsdatascience.com/stratified-sampling-you-may-have-been-splitting-your-dataset-all-wrong-8cfdd0d32502
+
+-   Kashyap, K. (2020). Machine Learning- Decision Trees and Random
+    Forest Classifiers. In Analytics Vidhya.
+    https://medium.com/analytics-vidhya/machine-learning-decision-trees-and-random-forest-classifiers-81422887a544
+
+-   kevin_theinfinityfund. (2021). Answer to 'Best practice for encoding
+    datetime in machine learning'. In Cross Validated.
+    https://stats.stackexchange.com/a/550016
+
+-   Logistic Regression Model Tuning with scikit-learn---Part 1 \textbar
+    by Finn Qiao \textbar Towards Data Science. (n.d.). Retrieved 10 May
+    2024, from
+    https://towardsdatascience.com/logistic-regression-model-tuning-with-scikit-learn-part-1-425142e01af5
+
+-   Loudness---Everything You Need To Know \textbar Production Expert.
+    (n.d.). Retrieved 12 May 2024, from
+    https://www.production-expert.com/production-expert-1/loudness-everything-you-need-to-know
+
+-   LUFS 101: What Are They & Why Are They So Important? (2023).
+    https://unison.audio/lufs/ Machine Learning- Decision Trees and
+    Random Forest Classifiers \textbar by Karan Kashyap \textbar
+    Analytics Vidhya \textbar Medium. (n.d.). Retrieved 18 May 2024,
+    from
+    https://medium.com/analytics-vidhya/machine-learning-decision-trees-and-random-forest-classifiers-81422887a544
+
+-   Machine learning---Does the optimal number of trees in a random
+    forest depend on the number of predictors? - Cross Validated.
+    (n.d.). Retrieved 12 May 2024, from
+    https://stats.stackexchange.com/questions/36165/does-the-optimal-number-of-trees-in-a-random-forest-depend-on-the-number-of-pred
+
+-   Making Predictive Models Robust: Holdout vs Cross-Validation.
+    (n.d.). In KDnuggets. Retrieved 10 May 2024, from
+    https://www.kdnuggets.com/making-predictive-model-robust-holdout-vs-cross-validation
+
+-   MLBA - S24---Ensemble Methods. (n.d.). In MLBA - S24. Retrieved 18
+    May 2024, from
+    https://do-unil.github.io/mlba/lectures/06_Ensembles/ML_Ensemble.html
+
+-   MLBA - S24---Interpretable ML. (n.d.). In MLBA - S24. Retrieved 18
+    May 2024, from
+    https://do-unil.github.io/mlba/lectures/07_InterpretableML/ML_Interp.html
+
+-   Molnar, C. (n.d.). 5.2 Logistic Regression \textbar Interpretable
+    Machine Learning. Retrieved 12 May 2024, from
+    https://christophm.github.io/interpretable-ml-book/logistic.html
+
+-   Monstercat Uncaged. (2024). Ace Aura---Doorman \[Monstercat
+    Release\]. https://www.youtube.com/watch?v=CMZlqpFi0G4
+
+-   Nijkamp, R. (n.d.). Prediction of product success: Explaining song
+    popularity by audio features from Spotify data.
+
+-   Normalized Nerd. (2021). Decision Tree Classification Clearly
+    Explained! https://www.youtube.com/watch?v=ZVR2Way4nwQ
+
+-   Occam's Razor in Machine Learning: Examples---Analytics Yogi.
+    (n.d.). Retrieved 12 May 2024, from
+    https://vitalflux.com/occams-razor-in-machine-learning-examples/
+
+-   Oshiro, T., Perez, P., & Baranauskas, J. (2012). How Many Trees in a
+    Random Forest? 7376. https://doi.org/10.1007/978-3-642-31537-4_13
+
+-   Pandian, S. (2022). A Comprehensive Guide on Hyperparameter Tuning
+    and its Techniques. In Analytics Vidhya.
+    https://www.analyticsvidhya.com/blog/2022/02/a-comprehensive-guide-on-hyperparameter-tuning-and-its-techniques/
+
+-   (PDF) How Many Trees in a Random Forest? (n.d.). Retrieved 12 May
+    2024, from
+    https://www.researchgate.net/publication/230766603_How_Many_Trees_in_a_Random_Forest
+
+-   (PDF) What is the best segment duration for music mood analysis ?
+    (n.d.). Retrieved 17 May 2024, from
+    https://www.researchgate.net/publication/4351507_What_is_the_best_segment_duration_for_music_mood_analysis
+
+-   Peterson, H. (2021). Halpeter/Danceability-Analysis.
+    https://github.com/halpeter/Danceability-Analysis
+
+-   Principal Component Analysis (PCA) in R Tutorial \textbar DataCamp.
+    (n.d.). Retrieved 18 May 2024, from
+    https://www.datacamp.com/tutorial/pca-analysis-r
+
+-   R: Control parameters for train. (n.d.). Retrieved 10 May 2024, from
+    https://search.r-project.org/CRAN/refmans/caret/html/trainControl.html
+
+-   Radiohead. (2016). How to Disappear Completely.
+    https://www.youtube.com/watch?v=6W6HhdqA95w
+
+-   RPubs---SVM with CARET. (n.d.). Retrieved 18 May 2024, from
+    https://rpubs.com/uky994/593668
+
+-   Selvaraj, N. (2022). Logistic Regression Explained in 7 Minutes. In
+    Towards Data Science.
+    https://towardsdatascience.com/logistic-regression-explained-in-7-minutes-f648bf44d53e
+
+-   Shaboozey. (2024). A Bar Song (Tipsy).
+    https://www.youtube.com/watch?v=lUj1Wjs7Hdg Spotify - Web Player:
+    Music for everyone. (n.d.). In
+
+-   Spotify. Retrieved 6 May 2024, from https://open.spotify.com/
+    Spotify User Stats (Updated March 2024). (n.d.). Retrieved 6 May
+    2024, from https://backlinko.com/spotify-users
+
+-   Spotify Wrapped 2023: 'Music genres are now irrelevant to fans'.
+    (2023). https://www.bbc.com/news/entertainment-arts-67111517
+
+-   The best way to encode dates, times, and other cyclical features.
+    (n.d.). Retrieved 17 May 2024, from
+    https://harrisonpim.com/blog/the-best-way-to-encode-dates-times-and-other-cyclical-features
+
+-   Train Test Validation Split: How To & Best Practices \[2023\].
+    (n.d.). Retrieved 12 May 2024, from
+    https://www.v7labs.com/blog/train-validation-test-set,
+    https://www.v7labs.com/blog/train-validation-test-set
+
+-   Unique Leader Records. (2020). INGESTED - 'No Half Measures'
+    (Official Lyric Video). https://www.youtube.com/watch?v=BZDOkVg8UF8
+
+-   Variable Importance Plots---An Introduction to the vip Package.
+    (n.d.). Retrieved 19 May 2024, from
+    https://cran.r-project.org/web/packages/vip/vignettes/vip.html
+
+-   Web API \textbar Spotify for Developers. (n.d.). Retrieved 6 May
+    2024, from https://developer.spotify.com/documentation/web-api
+
+-   Welcome to Spotipy! ---Spotipy 2.0 documentation. (n.d.). Retrieved
+    6 May 2024, from https://spotipy.readthedocs.io/en/2.22.1/
+
+-   What do the audio features mean? - Spot On Track Help center.
+    (n.d.). Retrieved 11 May 2024, from
+    https://help.spotontrack.com/article/what-do-the-audio-features-mean
+
+-   What is Hyperparameter Tuning? \textbar Domino Data Lab. (n.d.).
+    Retrieved 18 May 2024, from
+    https://domino.ai/data-science-dictionary/hyperparameter-tuning
+
+-   What's new in DALEX and DALEXtra. The DALEX package version 2.0
+    was... \textbar by Szymon Maksymiuk \textbar ResponsibleML \textbar
+    Medium. (n.d.). Retrieved 12 May 2024, from
+    https://medium.com/responsibleml/whats-new-in-dalex-and-dalextra-a75e5cebff0e
+
+-   When did The Game release "How We Do"? (n.d.). Retrieved 8 May 2024,
+    from https://genius.com/The-game-how-we-do-lyrics/q/release-date
+
+-   White, M. (2017). Answer to 'Best practice for encoding datetime in
+    machine learning'. In Cross Validated.
+    https://stats.stackexchange.com/a/311498
+
+-   Wolpert, D. H., & Macready, W. G. (1997). No free lunch theorems for
+    optimization. IEEE Transactions on Evolutionary Computation, 1(1),
+    67--82. https://doi.org/10.1109/4235.585893
+
+-   Xiao, Z., Dellandréa, E., Dou, W., & Chen, L. (2008). What is the
+    best segment duration for music mood analysis ? 17--24.
+    https://doi.org/10.1109/CBMI.2008.4564922
+
+-   Y.M.C.A. (song). (2024). In Wikipedia.
+    https://en.wikipedia.org/w/index.php?title=Y.M.C.A.\_(song)&oldid=1222757157
+
+-   You Don't Know Me (Armand Van Helden song). (2024). In Wikipedia.
+    https://en.wikipedia.org/w/index.php?title=You_Don%27t_Know_Me\_(Armand_Van_Helden_song)&oldid=1219319210

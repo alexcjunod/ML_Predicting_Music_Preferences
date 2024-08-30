@@ -1,0 +1,617 @@
+---
+bibliography: references.bib
+---
+
+```{r, message=FALSE, echo=FALSE}
+source(here::here("src/setup.R"))
+```
+
+# Data
+
+This section outlines the specifics regarding the dataset utilized by our team to predict if we would Like or Dislike a song, focusing on the features, data format, instances, and any pre-processing steps undertaken.
+
+## Data Collection and Processing Using Spotify's API
+
+As outlined in Section 1, we created our dataset by extracting the audio features and metadata from the tracks contained in two playlists that we created, one containing "Liked" tracks and the other "Disliked" tracks. The figure below illustrates the process we used to obtain data from Spotify's Web API. Our approach involved scripting in Python with the 'spotipy' Python library (Welcome to Spotipy! --- Spotipy 2.0 Documentation, n.d.), which facilitated API interaction through more simplified function calls.
+
+![Spotify Web API Script/Call Explained](`r here::here("image", "Spotify API Figure.png")`)
+
+
+## Implementation of Batching due to Data Volume and API Limitations
+
+Given the richness and volume of the data we were obtaining from Spotify, we faced several challenges:
+
+1.  **Data Volume**: Our Spotify playlists contained hundreds of songs. Fetching detailed data for each of the tracks, including audio features and metadata, significantly increased the volume of data requested and retrieved per API call.
+2.  **API Rate Limits:** Spotify imposes rate limits on how many requests can be made to their API within a certain time frame. Exceeding these limits resulted in a '429 Too Many Requests' error, causing our script to constantly time out and halt.
+
+To efficiently manage the volume of data and adhere to API constraints and after much trial and error, we successfully implemented a batching process:
+
+-   **Track URI Collection:** Initially, we collected all track URIs from the playlist using paginated results from 'playlist_tracks();. This method ensured we didn't miss any tracks due to pagination limits.
+
+-   **Batch Processing for Audio Features:** We fetched audio features in batches of 50 tracks per API call. This batching not only streamlined data retrieval but also minimized the risk of hitting rate limits, as fewer API requests were made in total. (e.g., one API call per track instead of 10 with batching)
+
+The batching technique and error handling mechanisms were crucial in efficiently retrieving large datasets from Spotify without interruption. This approach not only optimized our data collection process but also provided a robust framework to handle API limitations gracefully, ensuring comprehensive data retrieval for our predictive modeling project.
+
+## Data-set Format
+
+The dataset received from the Spotify Web API was in a JSON format. Given that our scripting code was written in Python, our code converted the pandas DataFrame into a csv file, which was then saved and imported into our R environment for further processing and analysis. This conversion facilitated the integration of the dataset with our analysis tools, allowing for more sophisticated data manipulation and visualization.
+
+```{r, eval=FALSE, echo=FALSE}
+library(reticulate)
+# Create a new Conda environment
+conda_create("spotify_env")
+# Set `reticulate` to use the new environment
+use_condaenv("spotify_env", required = TRUE)
+# Check the configuration
+py_config()
+py_install(c("spotipy", "pandas"), envname = "spotify_env")
+```
+
+```{python Spotify API Web Script, echo=TRUE, eval=FALSE}
+import spotipy
+from spotipy.oauth2 import SpotifyClientCredentials
+import pandas as pd
+
+client_id = '3bc451a66f2d428f8b5fed829a8256e2'
+client_secret = '96576bbc3b014d769549b05954e23d33'
+client_credentials_manager = SpotifyClientCredentials(client_id=client_id, client_secret=client_secret)
+sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager)
+
+# URLs of the playlists for Camille
+liked_playlist_link = 'https://open.spotify.com/playlist/3hHsoFEOSBttbLkd3YGyLU' # FINAL PLAYLIST
+disliked_playlist_link = 'https://open.spotify.com/playlist/5kci9g0ZiOSSP3MqJS6C9I' # 
+
+# URLs of the playlists for Alex 
+#liked_playlist_link = 'https://open.spotify.com/playlist/5s4m4kmikUzGf4LvX1Lms7'
+#disliked_playlist_link = 'https://open.spotify.com/playlist/6cq1EaOcKqxCC0wjOXpAv3'
+
+
+liked_playlist_URI = liked_playlist_link.split('/')[-1].split('?')[0]
+disliked_playlist_URI = disliked_playlist_link.split('/')[-1].split('?')[0]
+
+def fetch_tracks(playlist_URI, like_label, sp):
+    tracks_data = []
+    results = sp.playlist_tracks(playlist_URI)
+    track_items = results['items']
+    while results['next']:
+        results = sp.next(results)
+        track_items.extend(results['items'])
+
+    track_uris = [item['track']['uri'] for item in track_items]
+
+    # Batch fetch audio features and audio analysis
+    audio_features_list = []
+    for i in range(0, len(track_uris), 50):
+        audio_features_list.extend(sp.audio_features(track_uris[i:i+50]))
+
+    for item, audio_features in zip(track_items, audio_features_list):
+        track_details = item['track']
+        artist_info = sp.artist(track_details['artists'][0]['uri'])
+        album_info = sp.album(track_details['album']['uri'])
+        audio_analysis = sp.audio_analysis(track_details['uri'])
+
+        avg_segment_duration = sum(seg['duration'] for seg in audio_analysis['segments']) / len(audio_analysis['segments']) if audio_analysis['segments'] else 0
+        avg_segment_loudness = sum(seg['loudness_max'] for seg in audio_analysis['segments']) / len(audio_analysis['segments']) if audio_analysis['segments'] else 0
+        avg_segment_timbre = [sum(seg['timbre'][i] for seg in audio_analysis['segments']) / len(audio_analysis['segments']) for i in range(12)] if audio_analysis['segments'] else [0]*12
+        avg_section_tempo = sum(section['tempo'] for section in audio_analysis['sections']) / len(audio_analysis['sections']) if audio_analysis['sections'] else 0
+
+        track_data = {
+            'Track URI': track_details['uri'],
+            'Track Name': track_details['name'],
+            'Artist URI': track_details['artists'][0]['uri'],
+            'Artist Name': track_details['artists'][0]['name'],
+            'Artist Popularity': artist_info['popularity'],
+            'Artist Genres': ', '.join(artist_info['genres']),
+            'Artist Followers': artist_info['followers']['total'],
+            'Album Name': album_info['name'],
+            'Album Popularity': album_info['popularity'],
+            'Release Date': album_info['release_date'],
+            'Track Popularity': track_details['popularity'],
+            'Explicit': track_details['explicit'],
+            'Danceability': audio_features['danceability'],
+            'Energy': audio_features['energy'],
+            'Key': audio_features['key'],
+            'Loudness': audio_features['loudness'],
+            'Mode': audio_features['mode'],
+            'Speechiness': audio_features['speechiness'],
+            'Acousticness': audio_features['acousticness'],
+            'Instrumentalness': audio_features['instrumentalness'],
+            'Liveness': audio_features['liveness'],
+            'Valence': audio_features['valence'],
+            'Tempo': audio_features['tempo'],
+            'Duration_ms': audio_features['duration_ms'],
+            'Time Signature': audio_features['time_signature'],
+            'Average Segment Duration': avg_segment_duration,
+            'Average Segment Loudness': avg_segment_loudness,
+            'Average Segment Timbre': avg_segment_timbre,
+            'Average Section Tempo': avg_section_tempo,
+            'Liked': like_label
+        }
+        tracks_data.append(track_data)
+    return tracks_data
+
+liked_tracks = fetch_tracks(liked_playlist_URI, 1, sp)
+disliked_tracks = fetch_tracks(disliked_playlist_URI, 0, sp)
+all_tracks = liked_tracks + disliked_tracks
+
+df = pd.DataFrame(all_tracks)
+df.to_csv('df_alex.csv', index=False)
+print(df.head())
+```
+
+```{r dataset importation, echo=FALSE}
+df <- read.csv("df_alex.csv")
+```
+
+## Data-set Description and Features
+
+The following table outlines the features of our dataset which each provided key insights into different aspects of each song. Our complete dataset (containing all tracks from the two playlists combined) contains a total of 400 songs, each categorized either as Liked or Disliked based on our teammate Camille's music preferences. Specifically, the playlist included 200 tracks that were Liked and 200 tracks that were Disliked. Each song within the playlists were labeled (i.e., 1 for Liked and 0 for Disliked) according to these preferences, which served as our target variable for our predictive modeling. The table below shows the Feature name, its Type, an example from our dataset as well as a comprehensive explanation behind the variable. In order to fully understand these features, we've also integrated a HTML player just below which allows you to sample a 15 second segment of the tracks in our playlists containing the highest and the lowest values of each audio feature (e.g., high acoustic and low acoustic track). If you're interested in learning more about each of Spotify's Web API features you can also check out their documentation website which is extremely well documented [(Web API \| Spotify for Developers, n.d.).](https://developer.spotify.com/documentation/web-api)
+
+```{r dataset description, echo=FALSE}
+#| column: screen-inset-shaded
+# This code imports the Spotify dataset from the file directory, which is the location where the data file is stored.
+# Here we are creating a descriptive data frame for the Spotify dataset
+spotify_columns <- data.frame(
+  "Name" = names(df),
+  "Type" = sapply(df, function(column) class(column)[1]), 
+  "Example" = sapply(df, function(column) column[1]),  
+  "Explanation" = c(
+    "The Spotify URI for the track, uniquely identifying each song within Spotify.",
+    "The name of the track.",
+    "The Spotify URI for the artist of the track.",
+    "The name of the artist.",
+    "The popularity of the artist based on Spotify's algorithm.",
+    "A comma-separated list of genres associated with the artist.",
+    "The total number of followers the artist has on Spotify.",
+    "The name of the album where the track is featured.",
+    "The popularity of the album based on Spotify's algorithm.",
+    "The release date of the album.",
+    "The popularity of the track itself on Spotify.",
+    "Indicates if the track has explicit content.",
+    "A measure of how suitable a track is for dancing based on a combination of musical elements such as tempo, strength of the beat and the stability of the rhythm.",
+    "A measure of the intensity and activity of the track.",
+    "The key the track is in.",
+    "The overall loudness of a track in decibels (dB).",
+    "Modality of the track, where 1 represents major and 0 represents minor.",
+    "A measure of the presence of spoken words in a track.",
+    "A measure of how acoustic a track is. 1 represents a completely acoustic track.",
+    "A measure indicating the likelihood that the track was created without vocal content like singing.",
+    "Detects the presence of an audience in the recording.",
+    "A measure describing the musical positiveness conveyed by a track.",
+    "The overall estimated tempo of a track in beats per minute (BPM).",
+    "The duration of the track in milliseconds.",
+    "The estimated overall time signature of the track.",
+    "The average duration of musical segments within the track.",
+    "The average maximum loudness of segments within the track.",
+    "An array representing the timbral features averaged over all segments.",
+    "The average tempo calculated across all sections of the track.",
+    "A binary indicator (our target variable) (1 or 0) signifying whether the track is liked or disliked."
+    )
+)
+datatable(spotify_columns, rownames = FALSE, caption = "Spotify Dataset Feature Description", class = 'cell-border stripe')
+```
+
+```{=html}
+<!-- Include some basic styles for layout -->
+<style>
+  .audio-container {
+    display: flex;
+    justify-content: space-around; /* Centers and spaces out the audio players */
+    align-items: center; /* Align items vertically */
+    margin-top: 20px;
+  }
+
+  .audio-player {
+    text-align: center; /* Center align the text and audio player */
+    margin: 10px; /* Adds margin around each audio player for better spacing */
+  }
+
+  select {
+    width: 100%;
+    margin-bottom: 20px; /* Spacing between the select box and audio players */
+  }
+</style>
+
+<!-- Feature Selection with a prompt -->
+<select id="feature-select">
+  <option value="">Select a feature to hear audio feature differences</option> <!-- Default prompt option -->
+  <option value="danceability">Danceability</option>
+  <option value="energy">Energy</option>
+  <option value="key">Key</option>
+  <option value="loudness">Loudness</option>
+  <option value="mode">Mode</option>
+  <option value="speechiness">Speechiness</option>
+  <option value="acousticness">Acousticness</option>
+  <option value="instrumentalness">Instrumentalness</option>
+  <option value="liveness">Liveness</option>
+  <option value="valence">Valence</option>
+  <option value="tempo">Tempo</option>
+  <option value="timeSignature">Time Signature</option>
+  <option value="avgSegDuration">Average Segment Duration</option>
+  <option value="avgSegLoudness">Average Segment Loudness</option>
+  <option value="avgSegTempo">Average Segment Tempo</option>
+</select>
+
+<div class="audio-container">
+  <!-- High Feature Audio Player Container -->
+  <div class="audio-player">
+    <h3>High Feature Audio</h3> <!-- Title for the audio player -->
+    <audio id="high-audio" controls>
+      <source id="high-source" src="" type="audio/mp3">
+      Your browser does not support the audio element.
+    </audio>
+  </div>
+
+  <!-- Low Feature Audio Player Container -->
+  <div class="audio-player">
+    <h3>Low Feature Audio</h3> <!-- Title for the audio player -->
+    <audio id="low-audio" controls>
+      <source id="low-source" src="" type="audio/mp3">
+      Your browser does not support the audio element.
+    </audio>
+  </div>
+</div>
+
+<script>
+document.getElementById('feature-select').addEventListener('change', function() {
+  var feature = this.value; // Get selected feature
+  
+  // Update source for high value track
+  var highAudioPlayer = document.getElementById('high-audio');
+  var highSource = document.getElementById('high-source');
+  highSource.src = '../audio/high/' + feature + '_high.mp3'; // Adjusted path
+  highAudioPlayer.load(); // Reload the audio player
+
+  // Update source for low value track
+  var lowAudioPlayer = document.getElementById('low-audio');
+  var lowSource = document.getElementById('low-source');
+  lowSource.src = '../audio/low/' + feature + '_low.mp3'; // Adjusted path
+  lowAudioPlayer.load(); // Reload the audio player
+});
+</script>
+```
+::: {.callout-note title="Click Here For List Of Song Titles And References" collapse="true" appearance="simple"}
+| Feature              | High                                                                                                            | Low                                                                       |
+|---------------|-----------------------------------|----------------------|
+| Danceability         | Low Down (*Lil Baby - Low Down (Audio) - YouTube*, n.d.)                                                        | How to disapear completlely (*How to Disappear Completely*, 2020)         |
+| Energy               | No Half Measures (Unique Leader Records, 2020)                                                                  | Strange Fruit (*Strange Fruit*, 1939)                                     |
+| Key                  | i like the way you kiss me (*(18) Artemas - i like the Way You Kiss Me (Official Music Video) - YouTube*, n.d.) | Austin (*Austin*, 2020)                                                   |
+| Loudness             | Not Afraid (*(18) Eminem - Not Afraid (Lyrics) - YouTube*, n.d.)                                                | Strange Fruit (*Strange Fruit*, 1939)                                     |
+| Mode                 | A Bar Song (Tipsy) (Shaboozey, 2024)                                                                            | Hell N Back (*Bakar - Hell N Back (Official Video)*, n.d.)                |
+| Speechiness          | Hell N Back (*Bakar - Hell N Back (Official Video)*, n.d.)                                                      | I Just Called To Say I Love You (*I Just Called to Say I Love You*, 1984) |
+| Acousticness         | Strange Fruit (*Strange Fruit*, 1939)                                                                           | Jesus Christ Pose - Remastered 2016 (*Jesus Christ Pose*, 1991)           |
+| Instrumentalness     | How to disapear completlely (*How to Disappear Completely*, 2020)                                               | A Bar Song (Tipsy) (Shaboozey, 2024)                                      |
+| Liveness             | Doorman (*Doorman*, 2021)                                                                                       | Fuel (*Fuel*, 1997)                                                       |
+| Valence              | Big Yellow Taxi (*(18) Joni Mitchell - Big Yellow Taxi (Official Lyric Video) - YouTube*, n.d.)                 | Doorman (*Doorman*, 2021)                                                 |
+| Tempo                | Hell N Back (*Bakar - Hell N Back (Official Video)*, n.d.)                                                      | Where Do Broken Hearts Go (*Where Do Broken Hearts Go*, 1988)             |
+| Time Signature       | Jfais mes affaires (*(18) Djadja & Dinaz - J'fais Mes Affaires \[Clip Officiel\] - YouTube*, n.d.)              | Money - 2011 Remastered (*Money*, 1973)                                   |
+| Average Seg Duration | Strange (*(21) Celeste - Strange (Official Video) - YouTube*, n.d.)                                             | Rush (*Rush*, 2023)                                                       |
+| AvgSegLoudness       | Not Afraid (*(18) Eminem - Not Afraid (Lyrics) - YouTube*, n.d.)                                                | Strange Fruit (*Strange Fruit*, 1939)                                     |
+| AvgSegTempo          | Hell N Back (*Bakar - Hell N Back (Official Video)*, n.d.)                                                      | Where Do Broken Hearts Go (*Where Do Broken Hearts Go*, 1988)             |
+:::
+
+### Feature Selection & Reordering
+
+We selectively retained features that contributed significantly to our analysis, removing those that were redundant or less impactful:
+
+-   Song URLs: These are web addresses where each song could be accessed or streamed on Spotify. These URLs themselves didn't offer predictive value regarding whether a song would be Liked or Disliked since they don't contain information about the song's content or characteristics. These URLs were primarily used by our API script when requesting the corresponding song's audio features. Thus, they are often considered redundant and removed from the dataset.
+
+<!-- -->
+
+-   Artist URLs: Similar to song URLs, these are the web addresses for the artist profiles on Spotify and didn't offer predictive value.
+
+-   Average Segment Timbre: Timbre describes the texture or color of a musical sound distinguishing between different types of sounds and instruments. This specific audio metric was too detailed for our high-level analysis as it contained multiple levels of information (i.e., a list rather than a single value).
+
+Additionally, in order to facilitate model training and evaluation, the target variable which indicated whether a song was Liked or Disliked was moved to the first column of our dataset.
+
+```{r dropping columns, echo=FALSE}
+## Dropping irrelevant columns
+df <- df %>%
+  select(-Track.URI, -Artist.URI, -Average.Segment.Timbre)  # Dropping Artist and Song URLs
+#head(df)
+```
+
+```{r renaming columns, echo=FALSE}
+## Renaming columns in a more practical syntax
+df <- df %>%
+  rename(SongName = Track.Name,         
+         ArtistName = Artist.Name,      
+         AlbumName = Album.Name,        
+         AlbumReleaseDate = Release.Date,
+         ArtistPopularity = Artist.Popularity,
+         Genre = Artist.Genres, 
+         ArtistFollowers = Artist.Followers, 
+         AlbumPopularity = Album.Popularity, 
+         TrackPopularity = Track.Popularity, 
+         AvgSegDuration = Average.Segment.Duration, 
+         AvgSegLoudness = Average.Segment.Loudness, 
+         AvgSegTempo = Average.Section.Tempo,
+         TimeSignature = Time.Signature) 
+
+#head(df)
+```
+
+```{r moving output variable to first spot, echo=FALSE}
+# Output variable in first position in the dataset
+df <- df %>% select(last_col(), everything())
+#head(df)
+```
+
+### Data Cleaning
+
+Next, we examined the dataset for missing values and duplicates, as these could significantly affect the results and accuracy of our predictions. Prior to proceeding, we ensured the dataset was clean.
+
+-   **Missing Values:** Leveraging the high-quality data from Spotify's Web API, our dataset was generally complete. However, a meticulous search revealed that in 11 rows, the 'AlbumReleaseDate' feature included only the year, lacking a full date. This issue was addressed in the data handling section marked as 'Feature Engineering'
+
+-   **Removing Duplicates:** Due to Spotify's ability to list a song more than once in a playlist, or given the fact that a song can be found multiple times on Spotify (e.g., original and with Featuring artist, or normal vs acoustic) we took measures to eliminate any duplicates, whether found twice within the same playlist or across both playlists.
+
+```{r check for missing values,echo=FALSE}
+# Count missing values per column
+missing_values <- df %>%
+  summarize(across(everything(), ~sum(is.na(.))))
+#print("Missing values summary per column:")
+#print(missing_values)
+
+# Identify rows containing missing values
+rows_with_missing <- df %>%
+  filter(if_any(everything(), is.na))
+#print("Rows with missing values:")
+#print(rows_with_missing)
+
+# Identify duplicate rows
+duplicates <- df %>%
+  group_by(across(everything())) %>%
+  filter(n() > 1) %>%
+  ungroup()
+#print("Duplicate rows:")
+#print(duplicates)
+```
+
+```{r remove duplicate rows, echo=FALSE}
+#print(paste("Rows before cleaning duplicates:", nrow(df)))
+
+df <- df %>%
+  distinct()
+
+#print(paste("Rows after cleaning duplicates:", nrow(df)))
+```
+
+```{r removing missing values, echo=FALSE}
+#print(paste("Rows before cleaning missing values:", nrow(df)))
+df <- df %>%
+  drop_na()
+#print(paste("Rows after cleaning missing values:", nrow(df)))
+```
+
+### Feature Engineering
+
+To improve the predictability and quality of our model and ensure the usability of our data for machine learning models, we undertook several feature engineering in attempts to increase the datasets quality and predictive abilities. Below is a detailed breakdown of the features we engineered:
+
+-   **Age In Days:** We created a new column to quantify the age of each track by transforming it from its release date to the age of the song in days. We believe that this transformation provided more granularity and precision to our model, allowed us to integrate the cyclical nature of time and was more consistent than a simple release date (White, 2017) (The Best Way to Encode Dates, Times, and Other Cyclical Features, n.d.).
+
+-   **Duration in Seconds**: Originally, song durations were provided in milliseconds. We converted this measure into seconds to align with common perceptual timescales, making the data more intuitive and comparable across different analyses.
+
+-   **Average Segment Duration:** We calculated the average duration of musical segments within each track to better understand the song's structure and flow. Longer segments generally indicate a more drawn-out, possibly ambient style, while shorter segments suggest quicker, more dynamic changes within the track (e.g., Dance music has shorter segments, whereas Classical music will have longer segments) (Xiao et al., 2008)
+
+-   **Average Segment Loudness:** We calculated the average loudness of segments to gain insights into the track's dynamic range. The loudness level can affect a listener's perception of a song's energy and intensity, which are key elements in genres like electronic and rock music.
+
+-   **Average Section Tempo:** This feature involved computing the average tempo across various sections of a track. Tempo variations within a song can significantly affect its emotional impact and energy level, impacting its likelihood of being liked or disliked. We believed that this would be an interesting feature when combined with features such as valence which measures the "Happiness" of a song for example.
+
+-   **Count of Music Genres:** Given the nature of music genres on Spotify and their extreme granularity we weren't able to explicitly use Genres as a feature in our modelling; this would have been too complex and precise ([check out this interesting BBC article that discusses how Music genres have become so niche that they're now becoming irrelevant](#0)). However, we still wanted to incorporate genres in some way into our project, therefore we added a feature to count the number of genres associated with each track. This count provided a sense of the artist's versatility and breadth in musical styles, which could correlate with broader appeal across diverse listener groups. This could also be understood as a proxy for the "nicheness" of a given song.
+
+-   **Length of the Song Name:** We calculated the number of words in each song's title. This feature might seem trivial but could reflect certain trends in music marketing and titling that may appeal differently to various demographics.
+
+    ::: {.callout-tip collapse="true"}
+    ## Learn More About Our Averages
+
+    ### **Average Segment Duration**
+
+    This feature represents the average duration of the musical segments within a track. A segment in Spotify's terms usually represents a single musical event or note. The formula for calculating the average segment duration is:
+
+    $$
+    \text{Average Segment Duration} = \frac{\sum (\text{Segment Duration})}{\text{Number of Segments}} 
+    $$
+
+    Where:
+
+    -   **Segment Duration** is the duration of each segment within the track.
+
+    -   **Number of Segments** is the total count of segments analyzed within the track.
+
+    ### **Average Segment Loudness**
+
+    This feature captures the average maximum loudness of the segments within a track. Loudness is a crucial feature in music analysis as it impacts the perceived energy and intensity of the track.
+
+    $$
+    \text{Average Segment Loudness} = \frac{\sum (\text{Segment Max Loudness})}{\text{Number of Segments}} 
+    $$
+
+    Where:
+
+    -   **Segment Max Loudness** is the maximum loudness value recorded for each segment.
+
+    -   **Number of Segments** is the total count of segments analyzed within the track.
+
+    ### **Average Section Tempo**
+
+    The tempo of a song can vary between different sections. This average gives a general idea of the track's overall tempo, considering its variability across different parts.
+
+    $$
+    \text{Average Section Tempo} = \frac{\sum (\text{Section Tempo})}{\text{Number of Sections}} 
+    $$
+
+    Where:
+
+    -   **Section Tempo** is the tempo (beats per minute) of each section within the track.
+
+    -   **Number of Sections** is the total count of sections analyzed within the track.
+
+    These calculated averages provide deep insights into the structural and acoustic properties of each track. By integrating these features into your dataset, we enhance the capability of our machine learning models to find patterns and preferences in our teammates music listening behaviors, improving the accuracy of predicting whether a song will be Liked or Disliked.
+    :::
+
+```{r checking data types, echo=FALSE, eval=FALSE}
+str(df)
+```
+
+```{r date conversion, echo=FALSE,}
+# Function to safely convert date formats
+convertDate <- function(date_str) {
+  formats <- c("%Y-%m-%d", "%Y-%m", "%Y")  # Common date formats
+  for (format in formats) {
+    result <- tryCatch({
+      as.Date(date_str, format = format)
+    }, error = function(e) NA)
+    if (!is.na(result)) {
+      return(result)
+    }
+  }
+  return(NA)  # Return NA if no format matched
+}
+
+# Apply the function to the AlbumReleaseDate column
+df$AlbumReleaseDate <- sapply(df$AlbumReleaseDate, convertDate)
+```
+
+```{r, echo=FALSE, eval=FALSE}
+# Ensure AlbumReleaseDate is in the correct Date format
+df$AlbumReleaseDate <- as.Date(df$AlbumReleaseDate, format = "%Y-%m-%d")
+
+# Add a flag to identify rows with only a year in AlbumReleaseDate
+df$OnlyYear <- sapply(df$AlbumReleaseDate, function(date) {
+  # Format the date to string and check if it matches the pattern for a default full year date
+  formatted_date <- format(date, "%Y-%m-%d")
+  grepl("^\\d{4}-01-01$", formatted_date)
+})
+
+# Check how many were flagged (for debugging)
+print(sum(df$OnlyYear))
+
+# Filter the dataset for rows where OnlyYear is TRUE
+songs_with_incomplete_dates <- df[df$OnlyYear, c("SongName", "ArtistName", "AlbumName", "AlbumReleaseDate")]
+
+# View the list of songs
+print(songs_with_incomplete_dates)
+```
+
+```{r imputing new dates, eval=FALSE,echo=FALSE}
+# Make sure the length and order of this vector match the rows needing updates
+new_dates <- c(
+  "1999-01-25",   # U Don't Know Me (feat. Duane Harden) by Armand Van Helden
+  "1992-10-17",   # Wher'm I Gonna Live? by Billy Ray Cyrus
+  "2005-03-01",   # Banana Pancakes by Jack Johnson
+  "2001-07-10",   # Baila (Sexy Thing) - Remastered 2007 by Zucchero
+  "2007-12-10",   # This Is The Life by Amy Macdonald
+  "1957-02-01",   # Matchbox by Carl Perkins
+  "1992-08-04",   # Would I Lie To You? by Charles & Eddie
+  "1965-04-23",   # I Can't Help Myself (Sugar Pie, Honey Bunch) by Four Tops
+  "2005-03-01",   # Better Together by Jack Johnson
+  "1978-10-01",   # YMCA - Original Version 1978 by Village People
+  "1956-05-01",   # I Walk The Line - Single Version by Johnny Cash
+  "2014-04-24",   # Hey Brother - Extended Version by Avicii
+  "2012-01-27",   # Radio by Lana Del Rey
+  "2011-07-05",   # Somebody That I Used To Know by Gotye, 
+  "2021-03-13",   # Ella No Volverá by Dr. Bellido
+  "2008-02-05",   # Day and Night by Kid kuci
+  "2017-11-10",   #Wasting My Young Years
+  "2004-09-27",   #Drop it like its hot
+  "1998-04-27",   # Teardrop
+  "1939-04-20",   #Strange Fruit
+  "2013-01-18",   #Love me by Lil Wayne
+  "1994-08-08",   #blackholesun
+  "2014-01-09",   #chainsmokers
+  "2012-07-15",   #gangnam
+  "1997-02-04"    # metallica
+
+)
+# Update the AlbumReleaseDate for rows where only the year was previously provided
+df$AlbumReleaseDate[df$OnlyYear] <- as.Date(new_dates)
+df$OnlyYear <- NULL
+```
+
+```{r changing AlbumReleaseDate to date, echo=FALSE, eval=FALSE}
+# Convert AlbumReleaseDate column to a proper date format
+# If only a year is provided, default to January 1st of that year
+df$AlbumReleaseDate <- sapply(df$AlbumReleaseDate, function(date_str) {
+  if (nchar(date_str) == 4 && grepl("^\\d{4}$", date_str)) {
+    # If the date is only a year (e.g., "1992"), convert to "1992-01-01"
+    as.Date(paste0(date_str, "-01-01"), format="%Y-%m-%d")
+  } else {
+    # Otherwise, attempt to convert the date using the standard format
+    as.Date(date_str, format="%Y-%m-%d")
+  }
+})
+# Convert AlbumReleaseDate back to a Date type after sapply conversion
+df$AlbumReleaseDate <- as.Date(df$AlbumReleaseDate, origin="1970-01-01")
+
+# Display the first few AlbumReleaseDate values to confirm changes
+head(df$AlbumReleaseDate)
+
+# Check if any AlbumReleaseDate values couldn't be converted correctly
+invalid_dates <- df[is.na(df$AlbumReleaseDate), ]
+if (nrow(invalid_dates) > 0) {
+  print("Invalid AlbumReleaseDate values after conversion:")
+  print(invalid_dates)
+} else {
+  print("All AlbumReleaseDate values converted successfully.")
+}
+```
+
+```{r create AgeInDays column, echo=FALSE}
+# Calculate the age in days from Release Date to today
+df$AlbumReleaseDate <- as.Date(df$AlbumReleaseDate, origin="1970-01-01")
+df$AgeInDays <- as.integer(Sys.Date() - df$AlbumReleaseDate)
+missing_age_in_days <- df[is.na(df$AgeInDays), ]
+#print("Rows with missing AgeInDays:")
+#print(missing_age_in_days)
+# View the first few entries in the new AgeInDays column to confirm
+#head(df[c("AlbumReleaseDate", "AgeInDays")])
+df$AlbumReleaseDate <- NULL  
+```
+
+```{r, echo=FALSE}
+df$Duration <- df$Duration_ms / 1000
+df$Duration_ms <- NULL  # This will delete the 'Duration_ms' column
+#head(df)
+```
+
+```{r creating new features, echo=FALSE}
+df$WordCount <- str_count(df$SongName, '\\S+')
+df$GenreCount <- str_count(df$Genre, ',') + 1
+```
+
+```{r, echo=FALSE}
+df$Explicit <- as.integer(as.logical(df$Explicit))
+```
+
+```{r last missing value check, echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+# Fonction pour nettoyer chaque colonne
+clean_column <- function(data, column_name) {
+  # Affichage de la colonne en cours de traitement
+  cat("Cleaning column:", column_name, "\n")
+  
+  #Check for missing data
+  missing_values <- sum(is.na(data[[column_name]]))
+  cat("Missing values:", missing_values, "\n")
+  
+  #Deleting missing data
+  data <- data %>%
+    filter(!is.na(.data[[column_name]]))
+  
+  #Displaying number of rows after cleaning
+  cat("Remaining rows after cleaning:", nrow(data), "\n\n")
+  
+  return(data)
+}
+
+#Applying function to each column
+cleaned_df <- df
+for (col in colnames(df)) {
+  cleaned_df <- clean_column(cleaned_df, col)
+}
+df_clean <- cleaned_df
+```
+
+```{r, echo=FALSE}
+df_clean_path <- here::here("data", "df_clean")
+write.csv(df_clean, df_clean_path, row.names = FALSE)
+```
